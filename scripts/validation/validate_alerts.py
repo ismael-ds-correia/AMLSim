@@ -39,6 +39,10 @@ def load_alert_param(_alert_param_csv):
         param_data = dict()
         line_num = 2
         for row in reader:
+            if not row or all(cell.strip() == "" for cell in row):
+                continue  # Ignora linhas vazias
+            if len(row) < len(header):
+                continue  # Ignora linhas incompletas
             count = int(row[count_idx])
             alert_type = row[type_idx]
             is_ordered = int(row[schedule_idx]) > 0
@@ -88,6 +92,10 @@ def load_alert_tx(_alert_tx_schema, _alert_tx_csv):
         reader = csv.reader(_rf)
         next(reader)
         for row in reader:
+            if not row or all(cell.strip() == "" for cell in row):
+                continue  # Ignora linhas vazias
+            if len(row) < len(_alert_tx_schema):
+                continue  # Ignora linhas incompletas
             alert_id = row[alert_idx]
             alert_type = row[type_idx]
             orig_id = row[orig_idx]

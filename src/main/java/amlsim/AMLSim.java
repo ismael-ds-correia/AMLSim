@@ -226,6 +226,7 @@ public class AMLSim extends SimState {
 		Map<String, Integer> columnIndex = getColumnIndices(line);
 
 		while((line = reader.readLine()) != null){
+			if(line.trim().isEmpty()) continue;
 			String[] elements = line.split(",");
             String accountID = elements[columnIndex.get("ACCOUNT_ID")];
 			boolean isSAR = elements[columnIndex.get("IS_SAR")].toLowerCase().equals("true");
@@ -260,6 +261,7 @@ public class AMLSim extends SimState {
 		String line = reader.readLine();
 		Map<String, Integer> columnIndex = getColumnIndices(line);
 		while((line = reader.readLine()) != null){
+			if(line.trim().isEmpty()) continue;
 			String[] elements = line.split(",");
             String srcID = elements[columnIndex.get("src")];
             String dstID = elements[columnIndex.get("dst")];
@@ -281,6 +283,7 @@ public class AMLSim extends SimState {
 			Map<String, Integer> columnIndexMap = getColumnIndices(line);
 
 			while((line = reader.readLine()) != null) {
+				if(line.trim().isEmpty()) continue;
 				String[] elements = line.split(",");
 
 				String type = elements[columnIndexMap.get("type")];
@@ -335,6 +338,7 @@ public class AMLSim extends SimState {
 		Map<String, Integer> columnIndex = getColumnIndices(line);
 		Map<Long, Integer> scheduleModels = new HashMap<>();
 		while((line = reader.readLine()) != null){
+			if(line.trim().isEmpty()) continue;
 			String[] elements = line.split(",");
 			long alertID = Long.parseLong(elements[columnIndex.get("alertID")]);
             String accountID = elements[columnIndex.get("accountID")];

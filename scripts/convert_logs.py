@@ -609,6 +609,8 @@ class LogConverter:
         us_gen = self.fake['en_US']
 
         for row in reader:
+            if not row or all(cell.strip() == "" for cell in row):
+                continue
             output_row = list(self.schema.acct_defaults)
 
             acct_type = ""
@@ -847,6 +849,8 @@ class LogConverter:
         writer.writerow(header)
 
         for row in reader:
+            if not row or all(cell.strip() == "" for cell in row):
+                continue
             reason = row[indices["reason"]]
             alert_id = int(row[indices["alertID"]])
             account_id = int(row[indices["accountID"]])

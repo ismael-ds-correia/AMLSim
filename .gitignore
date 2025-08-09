@@ -26,6 +26,7 @@ hs_err_pid*
 # VS Code
 .vscode/
 .env
+venv37/
 
 # Temporal files
 tmp/

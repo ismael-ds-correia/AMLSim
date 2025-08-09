@@ -16,7 +16,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import warnings
 
-category = matplotlib.cbook.deprecation.MatplotlibDeprecationWarning
+import warnings
+category = UserWarning
 warnings.filterwarnings('ignore', category=category)
 warnings.filterwarnings('ignore', category=UserWarning)
 warnings.filterwarnings('ignore', category=RuntimeWarning)
@@ -66,6 +67,8 @@ def construct_graph(_acct_csv, _tx_csv, _schema):
         next(reader)  # Skip header
 
         for row in reader:
+            if not row or all(cell.strip() == "" for cell in row):
+                continue  # Ignora linhas vazias ou só com espaços
             acct_id = row[id_idx]
             bank_id = row[bank_idx]
             is_sar = row[sar_idx].lower() == "true"
@@ -92,6 +95,8 @@ def construct_graph(_acct_csv, _tx_csv, _schema):
         next(reader)  # Skip header
 
         for row in reader:
+            if not row or all(cell.strip() == "" for cell in row):
+                continue  # Ignora linhas vazias ou só com espaços
             orig = row[orig_idx]
             bene = row[bene_idx]
             tx_type = row[type_idx]
@@ -104,11 +109,12 @@ def construct_graph(_acct_csv, _tx_csv, _schema):
     return _g
 
 
-def plot_degree_distribution(_g, _conf, _plot_img):
+def plot_degree_distribution(_g, _conf, _plot_img, log_log_plot_img=None):
     """Plot degree distribution for accounts (vertices)
     :param _g: Transaction graph
     :param _conf: Configuration object
-    :param _plot_img: Degree distribution image (log-log plot)
+    :param _plot_img: Degree distribution image (normal plot)
+    :param log_log_plot_img: Degree distribution image (log-log plot)
     :return:
     """
     # Load parameter files
@@ -164,14 +170,12 @@ def plot_degree_distribution(_g, _conf, _plot_img):
                 out_deg_hist.append(out_num)
 
     multiplier = total_num_accts // deg_num_accts
-    # print(total_num_accts, deg_num_accts, multiplier)
     in_degrees = [d * multiplier for d in in_degrees]
     in_deg_hist = [d * multiplier for d in in_deg_hist]
     out_degrees = [d * multiplier for d in out_degrees]
     out_deg_hist = [d * multiplier for d in out_deg_hist]
 
-    # ax1, ax2: Expected in/out-degree distributions from parameter files
-    # ax3, ax4: Output in/out-degree distributions from the output transaction list
+    # Generate normal plot
     plt.clf()
     fig, axs = plt.subplots(2, 2, figsize=(16, 12))
     ax1, ax2, ax3, ax4 = axs[0, 0], axs[0, 1], axs[1, 0], axs[1, 1]
@@ -179,7 +183,7 @@ def plot_degree_distribution(_g, _conf, _plot_img):
     pw_result = powerlaw.Fit(in_degrees, verbose=False)
     alpha = pw_result.power_law.alpha
     alpha_text = "alpha = %.2f" % alpha
-    ax1.loglog(in_deg_seq, in_deg_hist, "bo-")
+    ax1.plot(in_deg_seq, in_deg_hist, "bo-")
     ax1.set_title("Expected in-degree distribution")
     plt.text(0.75, 0.9, alpha_text, transform=ax1.transAxes)
     ax1.set_xlabel("In-degree")
@@ -188,39 +192,66 @@ def plot_degree_distribution(_g, _conf, _plot_img):
     pw_result = powerlaw.Fit(out_degrees, verbose=False)
     alpha = pw_result.power_law.alpha
     alpha_text = "alpha = %.2f" % alpha
-    ax2.loglog(out_deg_seq, out_deg_hist, "ro-")
+    ax2.plot(out_deg_seq, out_deg_hist, "ro-")
     ax2.set_title("Expected out-degree distribution")
     plt.text(0.75, 0.9, alpha_text, transform=ax2.transAxes)
     ax2.set_xlabel("Out-degree")
     ax2.set_ylabel("Number of account vertices")
 
-    # Get degree from the output transaction list
-    in_degrees = [len(_g.pred[n].keys()) for n in _g.nodes()]  # list(_g.in_degree().values())
+    in_degrees = [len(_g.pred[n].keys()) for n in _g.nodes()]
     in_deg_seq = sorted(set(in_degrees))
     in_deg_hist = [in_degrees.count(x) for x in in_deg_seq]
     pw_result = powerlaw.Fit(in_degrees, verbose=False)
     alpha = pw_result.power_law.alpha
     alpha_text = "alpha = %.2f" % alpha
-    ax3.loglog(in_deg_seq, in_deg_hist, "bo-")
+    ax3.plot(in_deg_seq, in_deg_hist, "bo-")
     ax3.set_title("Output in-degree distribution")
     plt.text(0.75, 0.9, alpha_text, transform=ax3.transAxes)
     ax3.set_xlabel("In-degree")
     ax3.set_ylabel("Number of account vertices")
 
-    out_degrees = [len(_g.succ[n].keys()) for n in _g.nodes()]  # list(_g.out_degree().values())
-    # print("max out-degree", max(out_degrees))
+    out_degrees = [len(_g.succ[n].keys()) for n in _g.nodes()]
     out_deg_seq = sorted(set(out_degrees))
     out_deg_hist = [out_degrees.count(x) for x in out_deg_seq]
     pw_result = powerlaw.Fit(out_degrees, verbose=False)
     alpha = pw_result.power_law.alpha
     alpha_text = "alpha = %.2f" % alpha
-    ax4.loglog(out_deg_seq, out_deg_hist, "ro-")
+    ax4.plot(out_deg_seq, out_deg_hist, "ro-")
     ax4.set_title("Output out-degree distribution")
     plt.text(0.75, 0.9, alpha_text, transform=ax4.transAxes)
     ax4.set_xlabel("Out-degree")
     ax4.set_ylabel("Number of account vertices")
 
     plt.savefig(_plot_img)
+
+    # Generate log-log plot if specified
+    if log_log_plot_img:
+        plt.clf()
+        fig, axs = plt.subplots(2, 2, figsize=(16, 12))
+        ax1, ax2, ax3, ax4 = axs[0, 0], axs[0, 1], axs[1, 0], axs[1, 1]
+
+        ax1.loglog(in_deg_seq, in_deg_hist, "bo-")
+        ax1.set_title("Expected in-degree distribution (Log-Log)")
+        ax1.set_xlabel("In-degree")
+        ax1.set_ylabel("Number of account vertices")
+
+        ax2.loglog(out_deg_seq, out_deg_hist, "ro-")
+        ax2.set_title("Expected out-degree distribution (Log-Log)")
+        ax2.set_xlabel("Out-degree")
+        ax2.set_ylabel("Number of account vertices")
+
+        ax3.loglog(in_deg_seq, in_deg_hist, "bo-")
+        ax3.set_title("Output in-degree distribution (Log-Log)")
+        ax3.set_xlabel("In-degree")
+        ax3.set_ylabel("Number of account vertices")
+
+        ax4.loglog(out_deg_seq, out_deg_hist, "ro-")
+        ax4.set_title("Output out-degree distribution (Log-Log)")
+        ax4.set_xlabel("Out-degree")
+        ax4.set_ylabel("Number of account vertices")
+
+        plt.tight_layout()
+        plt.savefig(log_log_plot_img)
 
 
 def plot_wcc_distribution(_g, _plot_img):
@@ -244,6 +275,10 @@ def plot_wcc_distribution(_g, _plot_img):
 
 
 def plot_alert_stat(_alert_acct_csv, _alert_tx_csv, _schema, _plot_img):
+    from collections import Counter, defaultdict
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from datetime import datetime
 
     alert_member_count = Counter()
     alert_tx_count = Counter()
@@ -258,7 +293,6 @@ def plot_alert_stat(_alert_acct_csv, _alert_tx_csv, _schema, _plot_img):
     amt_idx = None
     date_idx = None
     type_idx = None
-    # bank_idx = None
     sar_idx = None
 
     acct_schema = _schema["alert_member"]
@@ -268,21 +302,21 @@ def plot_alert_stat(_alert_acct_csv, _alert_tx_csv, _schema, _plot_img):
             alert_idx = i
         elif data_type == "alert_type":
             type_idx = i
-        # elif data_type == "model_id":
-        #     bank_idx = i
         elif data_type == "sar_flag":
             sar_idx = i
 
+    # Lê alert_accounts.csv
     with open(_alert_acct_csv, "r") as _rf:
         reader = csv.reader(_rf)
-        next(reader)
-
+        header = next(reader)
         for row in reader:
+            if not row or all(cell.strip() == "" for cell in row):
+                continue  # Ignora linhas vazias
+            if len(row) < len(header):
+                continue  # Ignora linhas incompletas
             alert_id = row[alert_idx]
             alert_type = row[type_idx]
-            # bank_id = row[bank_idx]
             is_sar = row[sar_idx].lower() == "true"
-
             alert_member_count[alert_id] += 1
             alert_sar_flag[alert_id] = is_sar
             alert_types[alert_id] = alert_type
@@ -299,54 +333,47 @@ def plot_alert_stat(_alert_acct_csv, _alert_tx_csv, _schema, _plot_img):
         elif data_type == "timestamp":
             date_idx = i
 
+    # Lê alert_transactions.csv
     with open(_alert_tx_csv, "r") as _rf:
         reader = csv.reader(_rf)
-        next(reader)
-
+        header = next(reader)
         for row in reader:
+            if not row or all(cell.strip() == "" for cell in row):
+                continue  # Ignora linhas vazias
+            if len(row) < len(header):
+                continue  # Ignora linhas incompletas
             alert_id = row[alert_idx]
             amount = float(row[amt_idx])
             date_str = row[date_idx].split("T")[0]
             date = datetime.strptime(date_str, "%Y-%m-%d")
-
             alert_tx_count[alert_id] += 1
             if alert_id not in alert_init_amount:
                 alert_init_amount[alert_id] = amount
             alert_amount_list[alert_id].append(amount)
             alert_dates[alert_id].append(date)
 
-    # Scatter plot for all alerts
-    # ax1: Number of member accounts and transaction amount range
-    # ax2: Number of transactions and transaction period
+    # Scatter plot para todos os alerts (apenas os que têm transação)
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 12))
     cmap = plt.get_cmap("tab10")
     for i, (label, alerts) in enumerate(label_alerts.items()):
         color = cmap(i)
-        x = [alert_member_count[a] for a in alerts]
-        y_init = np.array([alert_init_amount[a] for a in alerts])
-        # y_med = np.array([np.median(alert_amount_list[a]) for a in alerts])
-        # y_min = np.array([min(alert_amount_list[a]) for a in alerts])
-        # y_max = np.array([max(alert_amount_list[a]) for a in alerts])
-        # y_err = [y_med - y_min, y_max - y_med]
-
+        # Só inclui alertas que têm transação registrada
+        valid_alerts = [a for a in alerts if a in alert_init_amount and a in alert_tx_count and a in alert_dates]
+        if not valid_alerts:
+            continue
+        x = [alert_member_count[a] for a in valid_alerts]
+        y_init = np.array([alert_init_amount[a] for a in valid_alerts])
         ax1.scatter(x, y_init, s=50, color=color, label=label, edgecolors="none")
-        for j, alert_id in enumerate(alerts):
+        for j, alert_id in enumerate(valid_alerts):
             ax1.annotate(alert_id, (x[j], y_init[j]))
-        # ax1.scatter(x, y_med, s=50, color=color, label=label, edgecolors="none")
-        # ax1.errorbar(x, y_med, yerr=y_err, ecolor=color, ls="none")
-        # for j, alert_id in enumerate(alerts):
-        #     ax1.annotate(alert_id, (x[j], y_med[j]))
-
-        x = [alert_tx_count[a] for a in alerts]
-        y_period = [(max(alert_dates[a]) - min(alert_dates[a])).days + 1
-                    for a in alerts]
-        ax2.scatter(x, y_period, s=100, color=color, label=label, edgecolors="none")
-        for j, alert_id in enumerate(alerts):
-            ax2.annotate(alert_id, (x[j], y_period[j]))
+        x2 = [alert_tx_count[a] for a in valid_alerts]
+        y_period = [(max(alert_dates[a]) - min(alert_dates[a])).days + 1 for a in valid_alerts]
+        ax2.scatter(x2, y_period, s=100, color=color, label=label, edgecolors="none")
+        for j, alert_id in enumerate(valid_alerts):
+            ax2.annotate(alert_id, (x2[j], y_period[j]))
 
     ax1.set_xlabel("Number of accounts per alert")
     ax1.set_ylabel("Initial transaction amount")
-    # ax1.set_ylabel("Min/Median/Max transaction amount")
     ax1.legend()
     ax2.set_xlabel("Number of transactions per alert")
     ax2.set_ylabel("Transaction period")
@@ -616,7 +643,12 @@ if __name__ == "__main__":
     b2b_plot = "bank2bank.png"
 
     print("Plot degree distributions")
-    plot_degree_distribution(g, conf, os.path.join(work_dir, deg_plot))
+    plot_degree_distribution(
+        g, 
+        conf, 
+        os.path.join(work_dir, deg_plot), 
+        log_log_plot_img=os.path.join(work_dir, "log_log_degree_distribution.png")
+    )
 
     print("Plot weakly connected component size distribution")
     plot_wcc_distribution(g, os.path.join(work_dir, wcc_plot))
