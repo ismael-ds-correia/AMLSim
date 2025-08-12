@@ -11,7 +11,7 @@ import networkx as nx
 import powerlaw
 from datetime import datetime, timedelta
 import numpy as np
-
+from scipy import stats
 import matplotlib
 import matplotlib.pyplot as plt
 import warnings
@@ -108,6 +108,191 @@ def construct_graph(_acct_csv, _tx_csv, _schema):
 
     return _g
 
+def create_weighted_graphs(_g):
+    """Create weighted graphs from the transaction graph
+    :param _g: Transaction graph
+    :return: Two dictionaries representing transaction count and amount weighted edges
+    """
+    edge_counts = {}
+    edge_amounts = {}
+    
+    # Group transactions by source-destination pairs
+    for src, dst, attr in _g.edges(data=True):
+        edge = (src, dst)
+        amount = float(attr.get("amount", 0))
+        if edge in edge_counts:
+            edge_counts[edge] += 1
+            edge_amounts[edge] += amount
+        else:
+            edge_counts[edge] = 1
+            edge_amounts[edge] = amount
+    
+    return edge_counts, edge_amounts
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def plot_strength_distributions(_g, _plot_img):
+    """
+    Plota as distribuições CCDF de in-strength e out-strength para grafos ponderados por número de transações e por volume.
+    :param _g: grafo de transações (MultiDiGraph)
+    :param _plot_img: caminho do arquivo de saída da imagem
+    """
+    # Cria os grafos ponderados
+    edge_counts, edge_amounts = create_weighted_graphs(_g)
+
+    # Inicializa dicionários para força de entrada/saída
+    in_strength_count = {n: 0 for n in _g.nodes()}
+    out_strength_count = {n: 0 for n in _g.nodes()}
+    in_strength_amount = {n: 0 for n in _g.nodes()}
+    out_strength_amount = {n: 0 for n in _g.nodes()}
+
+    # Calcula as forças para cada nó
+    for (src, dst), w in edge_counts.items():
+        out_strength_count[src] += w
+        in_strength_count[dst] += w
+    for (src, dst), w in edge_amounts.items():
+        out_strength_amount[src] += w
+        in_strength_amount[dst] += w
+
+    # Função para calcular CCDF
+    def ccdf(strengths):
+        strengths = np.array(list(strengths.values()))
+        strengths = strengths[strengths > 0]
+        strengths_sorted = np.sort(strengths)
+        ccdf_y = 1.0 - np.arange(1, len(strengths_sorted)+1) / len(strengths_sorted)
+        return strengths_sorted, ccdf_y
+
+    # Calcula CCDFs
+    x_in_count, y_in_count = ccdf(in_strength_count)
+    x_out_count, y_out_count = ccdf(out_strength_count)
+    x_in_amount, y_in_amount = ccdf(in_strength_amount)
+    x_out_amount, y_out_amount = ccdf(out_strength_amount)
+
+    # Plota
+    plt.figure(figsize=(10, 5))
+    plt.loglog(x_in_count, y_in_count, 'r.', label='In-strength $G^T$')
+    plt.loglog(x_out_count, y_out_count, 'b.', label='Out-strength $G^T$')
+    plt.loglog(x_in_amount, y_in_amount, 'g*', label='In-strength $G^N$')
+    plt.loglog(x_out_amount, y_out_amount, 'm.', label='Out-strength $G^N$')
+    plt.xlabel("Strength (s)")
+    plt.ylabel("$P_{>}(s)$")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(_plot_img)
+    plt.close()
+
+def plot_clustering_vs_degree(_g, _plot_img):
+    """
+    Plota o coeficiente de agrupamento médio em função do grau para diferentes grafos ponderados.
+    :param _g: grafo de transações (MultiDiGraph)
+    :param _plot_img: caminho do arquivo de saída da imagem
+    """
+    # Cria grafos ponderados
+    edge_counts, edge_amounts = create_weighted_graphs(_g)
+
+    # Grafo por número de transações (G^T)
+    G_T = nx.DiGraph()
+    for (src, dst), w in edge_counts.items():
+        G_T.add_edge(src, dst, weight=w)
+    # Grafo por volume (G^N)
+    G_N = nx.DiGraph()
+    for (src, dst), w in edge_amounts.items():
+        G_N.add_edge(src, dst, weight=w)
+
+    # Função para calcular clustering médio por grau
+    def clustering_by_degree(G):
+        # Se for MultiGraph/MultiDiGraph, converte para Graph
+        if isinstance(G, (nx.MultiGraph, nx.MultiDiGraph)):
+            G_simple = nx.Graph()
+            for u, v, data in G.edges(data=True):
+                # Soma os pesos das arestas múltiplas
+                w = data.get('weight', 1)
+                if G_simple.has_edge(u, v):
+                    G_simple[u][v]['weight'] += w
+                else:
+                    G_simple.add_edge(u, v, weight=w)
+        else:
+            G_simple = G.to_undirected()
+
+        degrees = dict(G_simple.degree())
+        clustering = nx.clustering(G_simple, weight='weight')
+        degs = []
+        clusts = []
+        for n in G_simple.nodes():
+            degs.append(degrees[n])
+            clusts.append(clustering[n])
+        return np.array(degs), np.array(clusts)
+
+    # Calcula para cada grafo
+    deg_T, clust_T = clustering_by_degree(G_T)
+    deg_N, clust_N = clustering_by_degree(G_N)
+    deg_base, clust_base = clustering_by_degree(_g)
+
+    # Plota
+    plt.figure(figsize=(10, 6))
+    plt.scatter(deg_base, clust_base, s=8, c='r', label='G')
+    plt.scatter(deg_T, clust_T, s=8, c='b', label='G$^T$')
+    plt.scatter(deg_N, clust_N, s=8, c='g', label='G$^N$')
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.xlabel("Degree (k)")
+    plt.ylabel("Clustering Coefficient")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(_plot_img)
+    plt.close()
+
+def calculate_transaction_correlation(edge_counts, edge_amounts):
+    """Calculate Spearman correlation between transaction count and amount
+    :param edge_counts: Dictionary with edges as keys and transaction counts as values
+    :param edge_amounts: Dictionary with edges as keys and transaction amounts as values
+    :return: Correlation coefficient, p-value, and formatted correlation text
+    """
+    from scipy import stats
+    
+    # Extract edge weights for correlation
+    edges = list(edge_counts.keys())
+    tx_counts = [edge_counts[edge] for edge in edges]
+    tx_amounts = [edge_amounts[edge] for edge in edges]
+    
+    # Calculate Spearman correlation
+    try:
+        correlation, p_value = stats.spearmanr(tx_counts, tx_amounts)
+        corr_text = f"Spearman correlation: {correlation:.4f} (p-value: {p_value:.4e})"
+    except Exception as e:
+        print(f"Error calculating correlation: {e}")
+        correlation, p_value = None, None
+        corr_text = "Correlation calculation failed"
+    
+    return correlation, p_value, corr_text, tx_counts, tx_amounts
+
+def plot_transaction_correlation(_g, _plot_img):
+    """Plot correlation between transaction count and transaction amount
+    :param _g: Transaction graph
+    :param _plot_img: Output image file path
+    :return: Spearman correlation coefficient and p-value
+    """
+    # Create weighted graphs
+    edge_counts, edge_amounts = create_weighted_graphs(_g)
+    
+    # Calculate correlation
+    correlation, p_value, corr_text, tx_counts, tx_amounts = calculate_transaction_correlation(
+        edge_counts, edge_amounts
+    )
+    
+    # Create log-log scatter plot
+    plt.figure(figsize=(12, 10))
+    plt.loglog(tx_counts, tx_amounts, 'bo', alpha=0.5, markersize=4)
+    plt.title(f"Transaction Count vs Total Amount\n{corr_text}")
+    plt.xlabel("Number of Transactions (log scale)")
+    plt.ylabel("Total Transaction Amount (log scale)")
+    plt.grid(True, which="both", ls="--", alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(_plot_img)
+    
+    print(f"Transaction correlation: {corr_text}")
+    return correlation, p_value
 
 def plot_degree_distribution(_g, _conf, _plot_img, log_log_plot_img=None):
     """Plot degree distribution for accounts (vertices)
@@ -671,8 +856,8 @@ if __name__ == "__main__":
     print("Plot transaction count per date")
     plot_tx_count(g, os.path.join(work_dir, count_plot))
 
-    print("Plot clustering coefficient of the transaction graph")
-    plot_clustering_coefficient(g, os.path.join(work_dir, cc_plot))
+    #print("Plot clustering coefficient of the transaction graph")
+    #plot_clustering_coefficient(g, os.path.join(work_dir, cc_plot))
 
     dia_log = conf["output"]["diameter_log"]
     dia_path = os.path.join(work_dir, dia_log)
@@ -685,3 +870,11 @@ if __name__ == "__main__":
 
     print("Plot bank-to-bank transaction counts")
     plot_bank2bank_count(g, os.path.join(work_dir, b2b_plot))
+
+    print("Plot transaction amount vs count correlation")
+    tx_corr_plot = "tx_correlation.png"
+    plot_transaction_correlation(g, os.path.join(work_dir, tx_corr_plot))
+
+    plot_strength_distributions(g, os.path.join(work_dir, "strength_ccdf.png"))
+
+    plot_clustering_vs_degree(g, os.path.join(work_dir, "clustering_vs_degree.png"))

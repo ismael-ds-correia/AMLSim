@@ -9,7 +9,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import warnings
 
-warnings.filterwarnings('ignore', category=matplotlib.cbook.deprecation.MatplotlibDeprecationWarning)
+# warnings.filterwarnings('ignore', category=matplotlib.cbook.deprecation.MatplotlibDeprecationWarning)
 
 
 def load_alerts(_conf_json):
@@ -53,6 +53,8 @@ def load_alerts(_conf_json):
         reader = csv.reader(rf)
         next(reader)
         for row in reader:
+            if not row or len(row) <= max(acct_idx, bank_idx):
+                continue  # ignora linhas vazias ou incompletas
             acct_id = row[acct_idx]
             bank_id = row[bank_idx]
             _g.add_node(acct_id, bank_id=bank_id)
@@ -62,6 +64,8 @@ def load_alerts(_conf_json):
         reader = csv.reader(rf)
         next(reader)
         for row in reader:
+            if not row or len(row) <= max(orig_idx, bene_idx, amt_idx, date_idx):
+                continue  # ignora linhas vazias ou incompletas
             orig_id = row[orig_idx]
             bene_id = row[bene_idx]
             amount = row[amt_idx]
@@ -75,7 +79,7 @@ def load_alerts(_conf_json):
 def plot_alerts(_g, _bank_accts, _output_png):
     bank_ids = _bank_accts.keys()
     cmap = plt.get_cmap("tab10")
-    pos = nx.nx_agraph.graphviz_layout(_g)
+    pos = nx.spring_layout(_g)
 
     plt.figure(figsize=(12.0, 8.0))
     plt.axis('off')
@@ -83,7 +87,7 @@ def plot_alerts(_g, _bank_accts, _output_png):
     for i, bank_id in enumerate(bank_ids):
         color = cmap(i)
         members = _bank_accts[bank_id]
-        nx.draw_networkx_nodes(_g, pos, members, node_size=300, node_color=color, label=bank_id)
+        nx.draw_networkx_nodes(_g, pos, members, node_size=300, node_color=[color], label=bank_id)
         nx.draw_networkx_labels(_g, pos, {n: n for n in members}, font_size=10)
 
     edge_labels = nx.get_edge_attributes(_g, "label")
