@@ -786,6 +786,17 @@ class LogConverter:
                 continue
 
             attr = {name: row[index] for name, index in indices.items()}
+
+            desc_idx = indices.get("desc", None)
+            desc = row[desc_idx] if desc_idx is not None else ""
+            is_fragmented = (
+                ttype in ("CASH-IN", "EXTERNAL", "CASH-IN-FRAGMENTED", "FRAGMENTED_DEPOSIT")
+                or desc in ("EXTERNAL", "CASH-IN-FRAGMENTED", "FRAGMENTED_DEPOSIT")
+            )
+            # Se for depósito fragmentado, padronize o tipo
+            if is_fragmented:
+                ttype = "FRAGMENTED_DEPOSIT"
+
             if ttype in CASH_TYPES:  # Cash transactions
                 cash_tx = (orig_id, dest_id, ttype, amount, date_str)
                 if cash_tx not in cash_tx_set:

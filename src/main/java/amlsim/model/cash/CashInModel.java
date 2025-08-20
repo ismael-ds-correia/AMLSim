@@ -1,5 +1,7 @@
 package amlsim.model.cash;
 
+import amlsim.AMLSim;
+import amlsim.Account;
 import amlsim.Branch;
 
 /**
@@ -48,5 +50,15 @@ public class CashInModel extends CashModel {
             float amount = computeAmount();
             makeTransaction(step, amount, account, branch, "CASH-IN");
         }
+    }
+
+    protected void makeTransaction(long step, Account orig, Account bene, double amount, String desc) {
+        boolean isSAR = bene.isSAR();
+        long alertID = 0L;
+        AMLSim.handleTransaction(step, desc, amount, orig, bene, isSAR, alertID);
+    }
+
+    public void registerExternalDeposit(long step, double amount, String description) {
+        this.makeTransaction(step, this.account.getBranch(), this.account, amount, description);
     }
 }

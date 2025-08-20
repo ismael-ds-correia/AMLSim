@@ -13,7 +13,6 @@
 package amlsim.model.aml;
 
 import amlsim.AMLSim;
-import amlsim.Account;
 import amlsim.Alert;
 import amlsim.model.AbstractTransactionModel;
 
@@ -31,6 +30,7 @@ public abstract class AMLTypology extends AbstractTransactionModel {
     private static final int RANDOM = 6;
     private static final int SCATTER_GATHER = 7;  // fan-out -> fan-in
     private static final int GATHER_SCATTER = 8;  // fan-in -> fan-out
+    private static final int FRAGMENTED_DEPOSIT = 9;
 
     // Transaction scheduling ID
     static final int FIXED_INTERVAL = 0;  // All accounts send money in order with the same interval
@@ -61,6 +61,7 @@ public abstract class AMLTypology extends AbstractTransactionModel {
             case RANDOM: model = new RandomTypology(minAmount, maxAmount, startStep, endStep); break;
             case SCATTER_GATHER: model = new ScatterGatherTypology(minAmount, maxAmount, startStep, endStep); break;
             case GATHER_SCATTER: model = new GatherScatterTypology(minAmount, maxAmount, startStep, endStep); break;
+            case FRAGMENTED_DEPOSIT: model = new FragmentedDepositTypology(minAmount, maxAmount, startStep, endStep); break;
             default: throw new IllegalArgumentException("Unknown typology model ID: " + modelID);
         }
         model.setParameters(startStep, endStep);

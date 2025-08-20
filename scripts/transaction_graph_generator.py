@@ -258,7 +258,7 @@ class TransactionGenerator:
         self.alert_groups = dict()  # Alert ID and alert transaction subgraph
         # TODO: Move the mapping of AML pattern to configuration JSON file
         self.alert_types = {"fan_out": 1, "fan_in": 2, "cycle": 3, "bipartite": 4, "stack": 5,
-                            "random": 6, "scatter_gather": 7, "gather_scatter": 8}  # Pattern name and model ID
+                            "random": 6, "scatter_gather": 7, "gather_scatter": 8, "fragmented_deposit": 9 }  # Pattern name and model ID
 
         self.acct_file = os.path.join(self.input_dir, self.account_file)
 
@@ -1184,6 +1184,30 @@ class TransactionGenerator:
                 add_edge(mid_acct, bene_acct, amount, date)
                 # print(mid_acct, "->", date, "->", bene_acct)
             # print(orig_accts, mid_acct, bene_accts)
+        elif typology_name == "fragmented_deposit":
+            # Seleciona a conta principal (alvo dos depósitos)
+            main_acct, main_bank_id = add_main_acct()
+            add_node(main_acct, main_bank_id)
+
+            # Fragmenta o valor total em vários depósitos menores
+            total_amount = RoundedAmount(min_amount, max_amount).getAmount()
+            num_deposits = random.randint(3, 7)  # Número de depósitos fragmentados
+
+            # Gera valores aleatórios que somam o total_amount
+            deposit_amounts = []
+            remaining = total_amount
+            for i in range(num_deposits - 1):
+                amt = random.uniform(remaining * 0.1, remaining * 0.5)
+                deposit_amounts.append(amt)
+                remaining -= amt
+            deposit_amounts.append(remaining)  # O último depósito recebe o restante
+
+            # Distribui os depósitos ao longo do período
+            deposit_steps = sorted(random.sample(range(start_date, end_date + 1), num_deposits))
+
+            for amt, step in zip(deposit_amounts, deposit_steps):
+                # Adiciona uma aresta fictícia de um nó externo (ex: -1) para a conta principal
+                add_edge(-1, main_acct, amt, step)
 
         # TODO: Please add user-defined typology implementations here
 
@@ -1209,6 +1233,8 @@ class TransactionGenerator:
                 aid = n[0]  # Account ID
                 cid = "C_" + str(aid)  # Customer ID bounded to this account
                 prop = n[1]  # Account attributes
+                if "init_balance" not in prop:
+                    continue
                 balance = "{0:.2f}".format(prop["init_balance"])  # Initial balance
                 country = prop["country"]  # Country
                 business = prop["business"]  # Business type
@@ -1255,6 +1281,8 @@ class TransactionGenerator:
                 start = sub_g.graph["start"]
                 end = sub_g.graph["end"]
                 for n in sub_g.nodes():
+                    if "bank_id" not in sub_g.node[n]:
+                        continue
                     is_main = "true" if n == main_id else "false"
                     is_sar = "true" if sub_g.graph[IS_SAR_KEY] else "false"
                     min_amt = '{:.2f}'.format(min(get_out_edge_attrs(sub_g, n, "amount")))

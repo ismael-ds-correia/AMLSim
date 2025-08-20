@@ -283,4 +283,8 @@ public class Account implements Steppable {
 	public void setParamFile(ArrayList<String> paramFile) {
 		this.paramFile = paramFile;
 	}
+
+	public CashInModel getCashInModel() {
+        return this.cashInModel;
+    }
 }

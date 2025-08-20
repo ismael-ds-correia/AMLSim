@@ -1,0 +1,96 @@
+package amlsim.model.aml;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+import amlsim.AMLSim;
+import amlsim.Account;
+import amlsim.model.cash.CashInModel;
+
+/**
+ * Fragmented Deposit Typology
+ * Simula depósitos fracionados para mascarar valores acima do limite legal.
+ */
+public class FragmentedDepositTypology extends AMLTypology {
+
+    private static final double LEGAL_LIMIT = 50000.0;      // Limite legal para depósito único
+    private static final double MAX_TOTAL = 100000.0;       // Valor máximo sorteado para depósito total
+
+    private Account targetAccount;                          // Conta que receberá os depósitos
+    private List<Long> depositSteps = new ArrayList<>();     // Passos de simulação para cada depósito
+    private List<Double> depositAmounts = new ArrayList<>(); // Valores de cada depósito fracionado
+    private double totalDeposit = 0.0;                      // Valor total a ser depositado
+
+    private Random random = AMLSim.getRandom();
+
+    FragmentedDepositTypology(double minAmount, double maxAmount, int startStep, int endStep) {
+        super(minAmount, maxAmount, startStep, endStep);
+    }
+
+    @Override
+    public void setParameters(int modelID) {
+        // Seleciona a conta alvo (mainAccount ou primeira da lista)
+        targetAccount = alert.getMainAccount();
+        if (targetAccount == null && !alert.getMembers().isEmpty()) {
+            targetAccount = alert.getMembers().get(0);
+        }
+
+        // Sorteia o valor total a ser depositado (entre LEGAL_LIMIT e MAX_TOTAL)
+        totalDeposit = LEGAL_LIMIT + random.nextDouble() * (MAX_TOTAL - LEGAL_LIMIT);
+
+        // Gera os depósitos fracionados
+        double deposited = 0.0;
+        int stepRange = getStepRange();
+        long currentStep = startStep;
+
+        while (deposited < totalDeposit) {
+            // Fração entre 15% e 25% do limite legal
+            double minFrac = 0.15 * LEGAL_LIMIT;
+            double maxFrac = 0.25 * LEGAL_LIMIT;
+            double fraction = minFrac + random.nextDouble() * (maxFrac - minFrac);
+
+            // Ajusta o valor do último depósito se necessário
+            double remaining = totalDeposit - deposited;
+            double depositValue = Math.min(fraction, remaining);
+
+            depositAmounts.add(depositValue);
+
+            // Sorteia o passo de simulação para o depósito (distribui ao longo do período)
+            if (stepRange > 1) {
+                long step = currentStep + random.nextInt(Math.max(1, stepRange / (depositAmounts.size())));
+                depositSteps.add(Math.min(step, endStep));
+                currentStep = Math.min(step + 1, endStep);
+            } else {
+                depositSteps.add(startStep);
+            }
+
+            deposited += depositValue;
+        }
+    }
+
+    @Override
+    public String getModelName() {
+        return "FragmentedDepositTypology";
+    }
+
+    @Override
+    public void sendTransactions(long step, Account acct) {
+        // Apenas a conta alvo recebe os depósitos
+        if (!acct.getID().equals(targetAccount.getID())) {
+            return;
+        }
+
+        // Para cada depósito agendado neste passo, realiza o depósito como cash-in
+        for (int i = 0; i < depositSteps.size(); i++) {
+            if (depositSteps.get(i) == step) {
+                double amount = depositAmounts.get(i);
+                // Usa o modelo de cash-in da conta para registrar o depósito
+                CashInModel cashIn = acct.getCashInModel();
+                // Chama o método protegido de CashModel para registrar o depósito
+                // O branch é obrigatório, pois cash-in é branch->account
+                cashIn.registerExternalDeposit(step, amount, "EXTERNAL");
+            }
+        }   
+    }
+}
