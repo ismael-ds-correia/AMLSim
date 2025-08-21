@@ -7,7 +7,8 @@ import datetime
 from dateutil.parser import parse
 from random import random
 from collections import defaultdict, Counter
-
+import re
+from datetime import timedelta
 from amlsim.account_data_type_lookup import AccountDataTypeLookup
 from faker import Faker
 import numpy as np
@@ -793,29 +794,39 @@ class LogConverter:
                 ttype in ("CASH-IN", "EXTERNAL", "CASH-IN-FRAGMENTED", "FRAGMENTED_DEPOSIT")
                 or desc in ("EXTERNAL", "CASH-IN-FRAGMENTED", "FRAGMENTED_DEPOSIT")
             )
-            # Se for depósito fragmentado, padronize o tipo
             if is_fragmented:
                 ttype = "FRAGMENTED_DEPOSIT"
 
-            if ttype in CASH_TYPES:  # Cash transactions
-                cash_tx = (orig_id, dest_id, ttype, amount, date_str)
+            # Novo: monta timestamp com hora
+            base_date = self.schema._base_date
+            date = base_date + timedelta(days=days)
+            hour = 0
+            m = re.search(r'HOUR=(\d+)', desc)
+            if m:
+                hour = int(m.group(1))
+            date = date.replace(hour=hour)
+            tran_timestamp = date.strftime("%Y-%m-%dT%H:00:00Z")
+
+            if ttype in CASH_TYPES:
+                cash_tx = (orig_id, dest_id, ttype, amount, tran_timestamp)
                 if cash_tx not in cash_tx_set:
                     cash_tx_set.add(cash_tx)
-                    output_row = self.schema.get_tx_row(tx_id, date_str, amount, ttype, orig_id, dest_id,
+                    output_row = self.schema.get_tx_row(tx_id, tran_timestamp, amount, ttype, orig_id, dest_id,
                                                         is_sar, alert_id, **attr)
                     cash_tx_writer.writerow(output_row)
-            else:  # Account-to-account transactions including alert transactions
-                tx = (orig_id, dest_id, ttype, amount, date_str)
+            else:
+                tx = (orig_id, dest_id, ttype, amount, tran_timestamp)
                 if tx not in tx_set:
-                    output_row = self.schema.get_tx_row(tx_id, date_str, amount, ttype, orig_id, dest_id,
+                    output_row = self.schema.get_tx_row(tx_id, tran_timestamp, amount, ttype, orig_id, dest_id,
                                                         is_sar, alert_id, **attr)
                     tx_writer.writerow(output_row)
                     tx_set.add(tx)
-            if is_alert:  # Alert transactions
+            if is_alert:
                 alert_type = self.reports.get(alert_id).get_reason()
                 alert_row = self.schema.get_alert_tx_row(alert_id, alert_type, is_sar, tx_id, orig_id, dest_id,
-                                                         ttype, amount, date_str, **attr)
+                                                        ttype, amount, tran_timestamp, **attr)
                 alert_tx_writer.writerow(alert_row)
+    
 
             if tx_id % 1000000 == 0:
                 print("Converted %d transactions." % tx_id)

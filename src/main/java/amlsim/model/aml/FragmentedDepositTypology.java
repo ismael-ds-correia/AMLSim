@@ -21,6 +21,7 @@ public class FragmentedDepositTypology extends AMLTypology {
     private List<Long> depositSteps = new ArrayList<>();     // Passos de simulação para cada depósito
     private List<Double> depositAmounts = new ArrayList<>(); // Valores de cada depósito fracionado
     private double totalDeposit = 0.0;                      // Valor total a ser depositado
+    private List<Integer> depositHours = new ArrayList<>();
 
     private Random random = AMLSim.getRandom();
 
@@ -59,6 +60,10 @@ public class FragmentedDepositTypology extends AMLTypology {
             // Todos os depósitos no mesmo dia
             depositSteps.add(startStep);
 
+            // Sorteia hora entre 6 e 18
+            int hour = 6 + random.nextInt(13); // 6 a 18 inclusive
+            depositHours.add(hour);
+
             deposited += depositValue;
         }
     }
@@ -70,21 +75,19 @@ public class FragmentedDepositTypology extends AMLTypology {
 
     @Override
     public void sendTransactions(long step, Account acct) {
-        // Apenas a conta alvo recebe os depósitos
         if (!acct.getID().equals(targetAccount.getID())) {
             return;
         }
-
-        // Para cada depósito agendado neste passo, realiza o depósito como cash-in
         for (int i = 0; i < depositSteps.size(); i++) {
             if (depositSteps.get(i) == step) {
                 double amount = depositAmounts.get(i);
-                // Usa o modelo de cash-in da conta para registrar o depósito
+                int hour = depositHours.get(i);
+
+                // Passe o horário como parte da descrição ou como parâmetro extra
                 CashInModel cashIn = acct.getCashInModel();
-                // Chama o método protegido de CashModel para registrar o depósito
-                // O branch é obrigatório, pois cash-in é branch->account
-                cashIn.registerExternalDeposit(step, amount, "EXTERNAL");
+                // Inclua o horário no description para ser processado depois
+                cashIn.registerExternalDeposit(step, amount, "EXTERNAL|HOUR=" + hour);
             }
-        }   
+        }
     }
 }
