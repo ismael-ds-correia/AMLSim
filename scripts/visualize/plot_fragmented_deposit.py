@@ -33,7 +33,7 @@ for acct_id in frag_txs['bene_acct'].unique():
     total = txs['base_amt'].sum()
     txs['% do Total'] = txs['base_amt'] / total * 100
 
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(8, 6))
     bars = ax.bar(txs['Depósito'], txs['base_amt'], color='green', alpha=0.7)
     ax.plot(txs['Depósito'], txs['cum_sum'], color='black', marker='o', label='Acumulado')
     ax.axhline(50000, color='red', linestyle='--', label='Limite de Notificação (R$50.000)')
@@ -59,19 +59,23 @@ for acct_id in frag_txs['bene_acct'].unique():
             f"{row['% do Total']:.1f}%",
             f"R${row['cum_sum']:.2f}"
         ])
+    # Linha de total: "TOTAL" na primeira coluna
+    table_data.append([
+        'TOTAL', '', f"R${total:.2f}", "100%", f"R${total:.2f}"
+    ])
     col_labels = ['#', 'Data', 'Valor', '% do Total', 'Acumulado']
 
-    # Adiciona a tabela abaixo do gráfico (ajustada para mais espaço)
-    plt.subplots_adjust(bottom=0.42)
+    # Ajusta espaço e tamanho da tabela para melhor leitura
+    plt.subplots_adjust(bottom=0.48)
     table = plt.table(
         cellText=table_data,
         colLabels=col_labels,
         cellLoc='center',
         loc='bottom',
-        bbox=[0.0, -0.60, 1, 0.45]  # aumenta a altura da tabela
+        bbox=[0.0, -0.75, 1, 0.5]  # aumenta a altura e espaço da tabela
     )
     table.auto_set_font_size(False)
-    table.set_fontsize(11)  # aumenta o tamanho da fonte
+    table.set_fontsize(13)  # aumenta o tamanho da fonte
 
     plt.tight_layout()
     # Salva o gráfico na subpasta

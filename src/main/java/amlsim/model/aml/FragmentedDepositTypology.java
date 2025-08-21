@@ -56,14 +56,8 @@ public class FragmentedDepositTypology extends AMLTypology {
 
             depositAmounts.add(depositValue);
 
-            // Sorteia o passo de simulação para o depósito (distribui ao longo do período)
-            if (stepRange > 1) {
-                long step = currentStep + random.nextInt(Math.max(1, stepRange / (depositAmounts.size())));
-                depositSteps.add(Math.min(step, endStep));
-                currentStep = Math.min(step + 1, endStep);
-            } else {
-                depositSteps.add(startStep);
-            }
+            // Todos os depósitos no mesmo dia
+            depositSteps.add(startStep);
 
             deposited += depositValue;
         }

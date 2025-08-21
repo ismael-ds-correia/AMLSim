@@ -1203,7 +1203,11 @@ class TransactionGenerator:
             deposit_amounts.append(remaining)  # O último depósito recebe o restante
 
             # Distribui os depósitos ao longo do período
-            deposit_steps = sorted(random.sample(range(start_date, end_date + 1), num_deposits))
+            if num_deposits > (end_date - start_date + 1):
+                # Todos os depósitos no mesmo dia
+                deposit_steps = [start_date] * num_deposits
+            else:
+                deposit_steps = sorted(random.sample(range(start_date, end_date + 1), num_deposits))
 
             for amt, step in zip(deposit_amounts, deposit_steps):
                 # Adiciona uma aresta fictícia de um nó externo (ex: -1) para a conta principal
