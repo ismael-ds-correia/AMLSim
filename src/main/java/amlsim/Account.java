@@ -287,4 +287,8 @@ public class Account implements Steppable {
 	public CashInModel getCashInModel() {
         return this.cashInModel;
     }
+
+	public CashOutModel getCashOutModel() {
+		return this.cashOutModel;
+	}
 }

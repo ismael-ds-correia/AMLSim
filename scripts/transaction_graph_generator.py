@@ -258,7 +258,7 @@ class TransactionGenerator:
         self.alert_groups = dict()  # Alert ID and alert transaction subgraph
         # TODO: Move the mapping of AML pattern to configuration JSON file
         self.alert_types = {"fan_out": 1, "fan_in": 2, "cycle": 3, "bipartite": 4, "stack": 5,
-                            "random": 6, "scatter_gather": 7, "gather_scatter": 8, "fragmented_deposit": 9 }  # Pattern name and model ID
+                            "random": 6, "scatter_gather": 7, "gather_scatter": 8, "fragmented_deposit": 9, "fragmented_withdrawal": 10 }  # Pattern name and model ID
 
         self.acct_file = os.path.join(self.input_dir, self.account_file)
 
@@ -1212,6 +1212,34 @@ class TransactionGenerator:
             for amt, step in zip(deposit_amounts, deposit_steps):
                 # Adiciona uma aresta fictícia de um nó externo (ex: -1) para a conta principal
                 add_edge(-1, main_acct, amt, step)
+        elif typology_name == "fragmented_withdrawal":
+            # Seleciona a conta principal (origem dos saques)
+            main_acct, main_bank_id = add_main_acct()
+            add_node(main_acct, main_bank_id)
+
+            # Fragmenta o valor total em vários saques menores
+            total_amount = RoundedAmount(min_amount, max_amount).getAmount()
+            num_withdrawals = random.randint(3, 7)  # Número de saques fragmentados
+
+            # Gera valores aleatórios que somam o total_amount
+            withdrawal_amounts = []
+            remaining = total_amount
+            for i in range(num_withdrawals - 1):
+                amt = random.uniform(remaining * 0.1, remaining * 0.5)
+                withdrawal_amounts.append(amt)
+                remaining -= amt
+            withdrawal_amounts.append(remaining)  # O último saque recebe o restante
+
+            # Distribui os saques ao longo do período
+            if num_withdrawals > (end_date - start_date + 1):
+                # Todos os saques no mesmo dia
+                withdrawal_steps = [start_date] * num_withdrawals
+            else:
+                withdrawal_steps = sorted(random.sample(range(start_date, end_date + 1), num_withdrawals))
+
+            for amt, step in zip(withdrawal_amounts, withdrawal_steps):
+                # Adiciona uma aresta fictícia da conta principal para um nó externo (ex: -1)
+                add_edge(main_acct, -1, amt, step)
 
         # TODO: Please add user-defined typology implementations here
 

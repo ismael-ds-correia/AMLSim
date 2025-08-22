@@ -86,7 +86,7 @@ public class FragmentedDepositTypology extends AMLTypology {
                 // Passe o horário como parte da descrição ou como parâmetro extra
                 CashInModel cashIn = acct.getCashInModel();
                 // Inclua o horário no description para ser processado depois
-                cashIn.registerExternalDeposit(step, amount, "EXTERNAL|HOUR=" + hour);
+                cashIn.registerExternalDeposit(step, amount, "FRAGMENTED_DEPOSIT");
             }
         }
     }

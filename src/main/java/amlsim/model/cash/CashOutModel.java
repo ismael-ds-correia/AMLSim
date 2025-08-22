@@ -1,5 +1,6 @@
 package amlsim.model.cash;
 
+import amlsim.AMLSim;
 import amlsim.Branch;
 
 /**
@@ -48,5 +49,17 @@ public class CashOutModel extends CashModel {
             float amount = computeAmount();
             makeTransaction(step, amount, branch, account, "CASH-OUT");
         }
+    }
+
+    public void registerExternalWithdrawal(long step, double amount, String description) {
+        // Origem: conta, Destino: agência (branch)
+        boolean isSAR = this.account.isSAR();
+        long alertID = 0L;
+        AMLSim.handleTransaction(step, description, amount, this.account, this.account.getBranch(), isSAR, alertID);
+    }
+
+    public void registerExternalWithdrawal(long step, double amount, String description, long alertID) {
+        boolean isSAR = this.account.isSAR();
+        AMLSim.handleTransaction(step, description, amount, this.account, this.account.getBranch(), isSAR, alertID);
     }
 }

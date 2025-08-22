@@ -1,10 +1,10 @@
 package amlsim.model.cash;
 
+import java.util.Random;
+
 import amlsim.AMLSim;
 import amlsim.Account;
 import amlsim.model.AbstractTransactionModel;
-
-import java.util.Random;
 
 /**
  * Cash transaction model (between an account and a deposit account)
