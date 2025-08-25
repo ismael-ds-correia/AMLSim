@@ -804,7 +804,6 @@ class LogConverter:
                 else:
                     ttype = "FRAGMENTED_DEPOSIT"
 
-            # Novo: monta timestamp com hora
             base_date = self.schema._base_date
             date = base_date + timedelta(days=days)
             hour = 0
@@ -818,20 +817,24 @@ class LogConverter:
                 cash_tx = (orig_id, dest_id, ttype, amount, tran_timestamp)
                 if cash_tx not in cash_tx_set:
                     cash_tx_set.add(cash_tx)
-                    output_row = self.schema.get_tx_row(tx_id, tran_timestamp, amount, ttype, orig_id, dest_id,
+                    output_row = self.schema.get_tx_row(tx_id, days, amount, ttype, orig_id, dest_id,
                                                         is_sar, alert_id, **attr)
                     cash_tx_writer.writerow(output_row)
             else:
                 tx = (orig_id, dest_id, ttype, amount, tran_timestamp)
                 if tx not in tx_set:
-                    output_row = self.schema.get_tx_row(tx_id, tran_timestamp, amount, ttype, orig_id, dest_id,
+                    output_row = self.schema.get_tx_row(tx_id, days, amount, ttype, orig_id, dest_id,
                                                         is_sar, alert_id, **attr)
                     tx_writer.writerow(output_row)
                     tx_set.add(tx)
+
             if is_alert:
-                alert_type = self.reports.get(alert_id).get_reason()
+                # SAFE: some alert_ids from tx log may not exist in self.reports (guard against None)
+                alert_typology = self.reports.get(alert_id)
+                alert_type = alert_typology.get_reason() if alert_typology is not None else ""
+                # PASSAR 'days' (inteiro), não tran_timestamp (string)
                 alert_row = self.schema.get_alert_tx_row(alert_id, alert_type, is_sar, tx_id, orig_id, dest_id,
-                                                        ttype, amount, tran_timestamp, **attr)
+                                                         ttype, amount, days, **attr)
                 alert_tx_writer.writerow(alert_row)
     
 

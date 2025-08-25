@@ -117,10 +117,15 @@ public class TransactionRepository {
     }
 
     void flushLog(){
-        // Flush transaction logs to the CSV file
         try {
-            FileWriter writer1 = new FileWriter(new File(AMLSim.getTxLogFileName()), true);
+            File file = new File(AMLSim.getTxLogFileName());
+            boolean fileExists = file.exists();
+            FileWriter writer1 = new FileWriter(file, true);
             BufferedWriter writer = new BufferedWriter(writer1);
+
+            if(!fileExists){
+                writer.write("step,type,amount,nameOrig,oldbalanceOrig,newbalanceOrig,nameDest,oldbalanceDest,newbalanceDest,isSAR,alertID\n");
+            }
 
             for(int i = 0; i < this.index; i++){
                 writer.write(steps[i] + "," + descriptions[i] + "," + getDoublePrecision(amounts[i]) + "," +

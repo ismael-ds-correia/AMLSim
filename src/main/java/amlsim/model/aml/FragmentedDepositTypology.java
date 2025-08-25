@@ -61,7 +61,7 @@ public class FragmentedDepositTypology extends AMLTypology {
             depositSteps.add(startStep);
 
             // Sorteia hora entre 6 e 18
-            int hour = 6 + random.nextInt(13); // 6 a 18 inclusive
+            int hour = 6 + random.nextInt(13);
             depositHours.add(hour);
 
             deposited += depositValue;
