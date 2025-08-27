@@ -121,17 +121,19 @@ def build_transaction_rows(alert_tx_df, accounts_lookup, alert_acct_lookup):
                 else:
                     nome_pessoa_od = (fn + " " + ln).strip()
 
-        # Novas colunas solicitadas
         base_amt = tx.get("base_amt", "")
         tx_type = safe_str(tx.get("tx_type", "")).upper()
         valor_transacao = format_base_amt(base_amt)
         i_d = 1 if tx_type == "FRAGMENTED_DEPOSIT" else 0
         i_e = 1 if tx_type == "FRAGMENTED_WITHDRAWAL" else 0
 
+        data_lancamento = safe_str(tx.get("tran_timestamp", ""))
+
         rows.append({
             "VALOR_TRANSACAO": valor_transacao,
             "I-d": i_d,
             "I-e": i_e,
+            "DATA_LANCAMENTO": data_lancamento,
             "NOME_BANCO": nome_banco,
             "NUMERO_CONTA": numero_conta,
             "CPF_CNPJ_TITULAR": cpf_cnpj_titular,
@@ -145,6 +147,7 @@ def build_transaction_rows(alert_tx_df, accounts_lookup, alert_acct_lookup):
         "VALOR_TRANSACAO",
         "I-d",
         "I-e",
+        "DATA_LANCAMENTO",
         "NOME_BANCO",
         "NUMERO_CONTA",
         "CPF_CNPJ_TITULAR",
