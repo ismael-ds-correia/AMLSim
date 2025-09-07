@@ -124,13 +124,23 @@ def build_transaction_rows(alert_tx_df, accounts_lookup, alert_acct_lookup):
         base_amt = tx.get("base_amt", "")
         tx_type = safe_str(tx.get("tx_type", "")).upper()
         valor_transacao = format_base_amt(base_amt)
-        i_d = 1 if tx_type == "FRAGMENTED_DEPOSIT" else 0
+        i_d = 1 if tx_type in ("CASH-DEPOSIT", "CHECK-DEPOSIT") else 0
         i_e = 1 if tx_type == "FRAGMENTED_WITHDRAWAL" else 0
 
         data_lancamento = safe_str(tx.get("tran_timestamp", ""))
 
+        if tx_type == "CHECK-DEPOSIT":
+            cnab = "201"
+        elif tx_type == "CASH-DEPOSIT":
+            cnab = "220"
+        elif tx_type == "FRAGMENTED_WITHDRAWAL":
+            cnab = "114"
+        else:
+            cnab = ""
+
         rows.append({
             "VALOR_TRANSACAO": valor_transacao,
+            "CNAB": cnab,
             "I-d": i_d,
             "I-e": i_e,
             "DATA_LANCAMENTO": data_lancamento,
@@ -145,6 +155,7 @@ def build_transaction_rows(alert_tx_df, accounts_lookup, alert_acct_lookup):
 
     cols = [
         "VALOR_TRANSACAO",
+        "CNAB",
         "I-d",
         "I-e",
         "DATA_LANCAMENTO",
@@ -163,7 +174,6 @@ def main():
     parser = argparse.ArgumentParser(description="Transforma dados do AMLSim em CSV de transações.")
     parser.add_argument(
         "-d", "--data-dir",
-        default=r"c:\Users\Diogenes\Desktop\AMLSim\outputs\my_simulation2",
         help="Pasta contendo alert_transactions.csv, accounts.csv (padrão: %(default)s)"
     )
     parser.add_argument(

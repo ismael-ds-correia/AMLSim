@@ -9,6 +9,8 @@ import java.util.Random;
 import java.util.Set;
 
 import amlsim.model.ModelParameters;
+import amlsim.model.cash.CashCheckDepositModel;
+import amlsim.model.cash.CashDepositModel;
 import amlsim.model.cash.CashInModel;
 import amlsim.model.cash.CashOutModel;
 import sim.engine.SimState;
@@ -20,6 +22,8 @@ public class Account implements Steppable {
 
 	protected CashInModel cashInModel;
 	protected CashOutModel cashOutModel;
+	private CashDepositModel cashDepositModel;
+	private CashCheckDepositModel cashCheckDepositModel;
 	protected boolean isSAR = false;
 	private Branch branch = null;
 	private Set<String> origAcctIDs = new HashSet<>();  // Originator account ID set
@@ -73,6 +77,15 @@ public class Account implements Steppable {
 		this.cashOutModel = new CashOutModel();
 		this.cashOutModel.setAccount(this);
 		this.cashOutModel.setParameters(interval, -1, -1);
+
+		// Cash Deposit Model
+		this.cashDepositModel = new CashDepositModel();
+		this.cashDepositModel.setAccount(this);
+		this.cashDepositModel.setParameters(interval, -1, -1);
+		// Cash Check Deposit Model
+		this.cashCheckDepositModel = new CashCheckDepositModel();
+		this.cashCheckDepositModel.setAccount(this);
+		this.cashCheckDepositModel.setParameters(interval, -1, -1);
 	}
 
 	public String getBankID() {
@@ -291,4 +304,10 @@ public class Account implements Steppable {
 	public CashOutModel getCashOutModel() {
 		return this.cashOutModel;
 	}
+
+	public CashDepositModel getCashDepositModel() { return this.cashDepositModel; }
+	public void setCashDepositModel(CashDepositModel model) { this.cashDepositModel = model; }
+
+	public CashCheckDepositModel getCashCheckDepositModel() { return this.cashCheckDepositModel; }
+	public void setCashCheckDepositModel(CashCheckDepositModel model) { this.cashCheckDepositModel = model; }
 }

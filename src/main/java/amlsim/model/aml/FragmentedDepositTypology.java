@@ -6,7 +6,8 @@ import java.util.Random;
 
 import amlsim.AMLSim;
 import amlsim.Account;
-import amlsim.model.cash.CashInModel;
+import amlsim.model.cash.CashCheckDepositModel;
+import amlsim.model.cash.CashDepositModel;
 
 /**
  * Fragmented Deposit Typology
@@ -83,10 +84,27 @@ public class FragmentedDepositTypology extends AMLTypology {
                 double amount = depositAmounts.get(i);
                 int hour = depositHours.get(i);
 
-                // Passe o horário como parte da descrição ou como parâmetro extra
-                CashInModel cashIn = acct.getCashInModel();
-                // Inclua o horário no description para ser processado depois
-                cashIn.registerExternalDeposit(step, amount, "FRAGMENTED_DEPOSIT");
+                Random rand = AMLSim.getRandom();
+                double prob = rand.nextDouble();
+                if (prob < 0.7) {
+                    // 70%: depósito em cheque (CNAB 201)
+                    CashCheckDepositModel checkModel = acct.getCashCheckDepositModel();
+                    if (checkModel != null) {
+                        checkModel.registerCheckDeposit(step, amount, "CHECK-DEPOSIT");
+                    } else {
+                        // fallback: depósito normal
+                        acct.getCashInModel().registerExternalDeposit(step, amount, "FRAGMENTED_DEPOSIT");
+                    }
+                } else {
+                    // 30%: depósito em espécie (CNAB 220)
+                    CashDepositModel cashDepositModel = acct.getCashDepositModel();
+                    if (cashDepositModel != null) {
+                        cashDepositModel.registerCashDeposit(step, amount, "CASH-DEPOSIT");
+                    } else {
+                        // fallback: depósito normal
+                        acct.getCashInModel().registerExternalDeposit(step, amount, "FRAGMENTED_DEPOSIT");
+                    }
+                }
             }
         }
     }
