@@ -17,6 +17,23 @@ import pandas as pd
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
+def get_natureza_lancamento(tx_type):
+    """
+    Retorna 'C' para crédito e 'D' para débito em relação ao saldo da conta principal (originador).
+    """
+    tx_type = str(tx_type).upper()
+    # Depósitos são crédito
+    if tx_type in ("CASH-DEPOSIT", "CHECK-DEPOSIT", "FRAGMENTED_DEPOSIT"):
+        return "C"
+    # Saques são débito
+    elif tx_type in ("FRAGMENTED_WITHDRAWAL", "CASH-OUT"):
+        return "D"
+    # Transferências: originador é débito
+    elif tx_type in ("TRANSFER", "PAYMENT", "DEBIT"):
+        return "D"
+    # Outros tipos: pode ajustar conforme necessário
+    else:
+        return ""
 
 def load_csv_skip_comments(path, encoding="utf-8"):
     with open(path, "r", encoding=encoding) as f:
@@ -25,7 +42,6 @@ def load_csv_skip_comments(path, encoding="utf-8"):
     txt = "".join(filtered)
     return pd.read_csv(StringIO(txt))
 
-
 def safe_str(x):
     if pd.isna(x):
         return ""
@@ -33,7 +49,6 @@ def safe_str(x):
     if s == "-" or s.lower() == "nan":
         return ""
     return s
-
 
 def build_lookup_tables(accounts_df=None, alert_accounts_df=None):
     accounts_lookup = {}
@@ -56,7 +71,6 @@ def build_lookup_tables(accounts_df=None, alert_accounts_df=None):
 
     return accounts_lookup, alert_acct_lookup
 
-
 def enrich_account_info(acct_key, accounts_lookup, alert_acct_lookup):
     if not acct_key:
         return None
@@ -66,7 +80,6 @@ def enrich_account_info(acct_key, accounts_lookup, alert_acct_lookup):
         return alert_acct_lookup[acct_key]
     return None
 
-
 def format_base_amt(val):
     if pd.isna(val) or safe_str(val) == "":
         return ""
@@ -74,7 +87,6 @@ def format_base_amt(val):
         return float(val)
     except Exception:
         return safe_str(val)
-
 
 def build_transaction_rows(alert_tx_df, accounts_lookup, alert_acct_lookup):
     rows = []
@@ -138,6 +150,14 @@ def build_transaction_rows(alert_tx_df, accounts_lookup, alert_acct_lookup):
         else:
             cnab = ""
 
+        # Adiciona VALOR_SALDO: saldo do beneficiário após a transação (newbalanceDest)
+        valor_saldo = tx.get("newbalanceDest", "")
+        if pd.isna(valor_saldo) or safe_str(valor_saldo) == "":
+            valor_saldo = tx.get("newbalanceOrig", "")
+
+        # Adiciona NATUREZA_LANCAMENTO
+        natureza_lancamento = get_natureza_lancamento(tx_type)
+
         rows.append({
             "VALOR_TRANSACAO": valor_transacao,
             "CNAB": cnab,
@@ -150,7 +170,9 @@ def build_transaction_rows(alert_tx_df, accounts_lookup, alert_acct_lookup):
             "NOME_TITULAR": nome_titular,
             "NUMERO_CONTA_OD": numero_conta_od,
             "CPF_CNPJ_OD": cpf_cnpj_od,
-            "NOME_PESSOA_OD": nome_pessoa_od
+            "NOME_PESSOA_OD": nome_pessoa_od,
+            "VALOR_SALDO": valor_saldo,
+            "NATUREZA_LANCAMENTO": natureza_lancamento
         })
 
     cols = [
@@ -165,7 +187,9 @@ def build_transaction_rows(alert_tx_df, accounts_lookup, alert_acct_lookup):
         "NOME_TITULAR",
         "NUMERO_CONTA_OD",
         "CPF_CNPJ_OD",
-        "NOME_PESSOA_OD"
+        "NOME_PESSOA_OD",
+        "VALOR_SALDO",
+        "NATUREZA_LANCAMENTO"
     ]
     return pd.DataFrame(rows, columns=cols)
 

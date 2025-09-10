@@ -388,6 +388,10 @@ class Schema:
 
     def get_tx_row(self, _tx_id, _timestamp, _amount, _tx_type, _orig, _dest, _is_sar, _alert_id, **attr):
         row = list(self.tx_defaults)
+        # Garante que a lista row tenha tamanho suficiente para todos os campos
+        max_idx = max(self.tx_name2idx.values())
+        if len(row) <= max_idx:
+            row.extend([""] * (max_idx + 1 - len(row)))
         row[self.tx_id_idx] = _tx_id
         row[self.tx_time_idx] = _timestamp
         row[self.tx_amount_idx] = _amount
@@ -753,6 +757,14 @@ class LogConverter:
         indices = {name: index for index, name in enumerate(header)}
         num_columns = len(header)
 
+        # Adiciona campos de saldo ao cabeçalho de saída, se não estiverem presentes
+        saldo_fields = ["oldbalanceOrig", "newbalanceOrig", "oldbalanceDest", "newbalanceDest"]
+        for field in saldo_fields:
+            if field not in self.schema.tx_names:
+                self.schema.tx_names.append(field)
+            if field not in self.schema.tx_name2idx:
+                self.schema.tx_name2idx[field] = len(self.schema.tx_name2idx)
+
         tx_header = self.schema.tx_names
         alert_header = self.schema.alert_tx_names
         tx_writer.writerow(tx_header)
@@ -787,6 +799,13 @@ class LogConverter:
                 continue
 
             attr = {name: row[index] for name, index in indices.items()}
+
+            # Garante que os campos de saldo estejam presentes em attr
+            for field in saldo_fields:
+                if field in indices:
+                    attr[field] = row[indices[field]]
+                else:
+                    attr[field] = ""
 
             desc_idx = indices.get("desc", None)
             desc = row[desc_idx] if desc_idx is not None else ""
@@ -829,14 +848,11 @@ class LogConverter:
                     tx_set.add(tx)
 
             if is_alert:
-                # SAFE: some alert_ids from tx log may not exist in self.reports (guard against None)
                 alert_typology = self.reports.get(alert_id)
                 alert_type = alert_typology.get_reason() if alert_typology is not None else ""
-                # PASSAR 'days' (inteiro), não tran_timestamp (string)
                 alert_row = self.schema.get_alert_tx_row(alert_id, alert_type, is_sar, tx_id, orig_id, dest_id,
                                                          ttype, amount, days, **attr)
                 alert_tx_writer.writerow(alert_row)
-    
 
             if tx_id % 1000000 == 0:
                 print("Converted %d transactions." % tx_id)
