@@ -27,7 +27,7 @@ public class CashCheckDepositModel extends CashModel {
 
     private boolean isNextStep(long step){
         // Implemente sua lógica de agendamento aqui, se necessário
-        return true;
+        return false;
     }
 
     private float computeAmount(){

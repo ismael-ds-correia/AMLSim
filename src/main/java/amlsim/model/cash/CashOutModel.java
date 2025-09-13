@@ -25,7 +25,7 @@ public class CashOutModel extends CashModel {
     }
 
     private boolean isNextStep(long step){
-        return true;
+        return false;
     }
 
     private float computeAmount(){
