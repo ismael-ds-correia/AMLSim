@@ -19,16 +19,16 @@
     "bank_id": "default",
 
     "cash_in": {
-      "normal_interval": 100,
-      "fraud_interval": 50,
+      "normal_interval": 200,
+      "fraud_interval": 100,
       "normal_min_amount": 50,
       "normal_max_amount": 100,
       "fraud_min_amount": 500,
       "fraud_max_amount": 1000
     },
     "cash_out": {
-      "normal_interval": 10,
-      "fraud_interval": 100,
+      "normal_interval": 200,
+      "fraud_interval": 200,
       "normal_min_amount": 10,
       "normal_max_amount": 100,
       "fraud_min_amount": 1000,

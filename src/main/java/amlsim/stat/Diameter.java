@@ -1,8 +1,17 @@
 package amlsim.stat;
 
-import java.io.*;
-import java.util.*;
-import it.unimi.dsi.webgraph.*;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import it.unimi.dsi.webgraph.ArrayListMutableGraph;
+import it.unimi.dsi.webgraph.ImmutableGraph;
 import it.unimi.dsi.webgraph.algo.HyperBall;
 
 /**
@@ -28,24 +37,33 @@ public class Diameter {
      */
 //    public void addEdge(long srcID, long dstID){
     public void addEdge(String srcID, String dstID){
+        // Ignore branches (IDs starting with "B" or "BRANCH")
+        if(srcID.startsWith("B") || dstID.startsWith("B") || srcID.startsWith("BRANCH") || dstID.startsWith("BRANCH")) {
+            return;
+        }
+        // Prevent exceeding graph order
+        if(id2idx.size() >= graph.numNodes()) {
+            return;
+        }
         if(!id2idx.containsKey(srcID)){
             int idx = id2idx.size();
+            if(idx >= graph.numNodes()) return;
             id2idx.put(srcID, idx);
             adj.put(idx, new HashSet<>());
         }
         if(!id2idx.containsKey(dstID)){
             int idx = id2idx.size();
+            if(idx >= graph.numNodes()) return;
             id2idx.put(dstID, idx);
             adj.put(idx, new HashSet<>());
         }
         int srcIdx = id2idx.get(srcID);
         int dstIdx = id2idx.get(dstID);
-        if(!adj.get(srcIdx).contains(dstIdx)) {  // If this edge is not yet added, add it
+        if(!adj.get(srcIdx).contains(dstIdx)) {
             graph.addArc(srcIdx, dstIdx);
             adj.get(srcIdx).add(dstIdx);
         }
     }
-
     /**
      * Compute diameter and average length with HyperANF
      * @return Diameter and average length as an array of double values

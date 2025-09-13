@@ -809,19 +809,10 @@ class LogConverter:
 
             desc_idx = indices.get("desc", None)
             desc = row[desc_idx] if desc_idx is not None else ""
-            is_fragmented = (
-                ttype in ("CASH-IN", "EXTERNAL", "CASH-IN-FRAGMENTED", "FRAGMENTED_DEPOSIT", "CASH-OUT", "FRAGMENTED_WITHDRAWAL")
-                or desc in ("EXTERNAL", "CASH-IN-FRAGMENTED", "FRAGMENTED_DEPOSIT", "FRAGMENTED_WITHDRAWAL")
-            )
-            if is_fragmented:
-                if ttype in ("CASH-IN", "CASH-IN-FRAGMENTED", "FRAGMENTED_DEPOSIT"):
-                    ttype = "FRAGMENTED_DEPOSIT"
-                elif ttype in ("CASH-OUT", "FRAGMENTED_WITHDRAWAL"):
-                    ttype = "FRAGMENTED_WITHDRAWAL"
-                elif desc == "FRAGMENTED_WITHDRAWAL":
-                    ttype = "FRAGMENTED_WITHDRAWAL"
-                else:
-                    ttype = "FRAGMENTED_DEPOSIT"
+            if ttype in ("CASH-DEPOSIT", "CHECK-DEPOSIT"):
+                ttype = "FRAGMENTED_DEPOSIT"
+            elif ttype == "FRAGMENTED_WITHDRAWAL":
+                ttype = "FRAGMENTED_WITHDRAWAL"
 
             base_date = self.schema._base_date
             date = base_date + timedelta(days=days)
