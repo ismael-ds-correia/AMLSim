@@ -43,8 +43,6 @@ public class FragmentedDepositTypology extends AMLTypology {
 
         // Gera os depósitos fracionados
         double deposited = 0.0;
-        int stepRange = getStepRange();
-        long currentStep = startStep;
 
         while (deposited < totalDeposit) {
             // Fração entre 15% e 25% do limite legal
@@ -58,8 +56,10 @@ public class FragmentedDepositTypology extends AMLTypology {
 
             depositAmounts.add(depositValue);
 
-            // Todos os depósitos no mesmo dia
-            depositSteps.add(startStep);
+            // Sorteia o dia do depósito dentro do intervalo
+            int stepRange = (int)(endStep - startStep + 1);
+            long depositStep = startStep + random.nextInt(stepRange);
+            depositSteps.add(depositStep);
 
             // Sorteia hora entre 6 e 18
             int hour = 6 + random.nextInt(13);

@@ -54,8 +54,10 @@ public class FragmentedWithdrawalTypology extends AMLTypology {
 
             withdrawalAmounts.add(withdrawalValue);
 
-            // Todos os saques no mesmo dia
-            withdrawalSteps.add(startStep);
+            // Sorteia o dia do saque dentro do intervalo
+            int stepRange = (int)(endStep - startStep + 1);
+            long withdrawalStep = startStep + random.nextInt(stepRange);
+            withdrawalSteps.add(withdrawalStep);
 
             withdrawn += withdrawalValue;
         }
