@@ -131,6 +131,14 @@ def build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_loo
 
         base_amt = tx.get("base_amt", "")
         tx_type = safe_str(tx.get("tx_type", "")).upper()
+
+        if tx_type == "FRAGMENTED_DEPOSIT":
+            numero_conta = bene_acct
+        elif orig_acct:
+            numero_conta = orig_acct
+        elif bene_acct:
+            numero_conta = bene_acct
+            
         valor_transacao = format_base_amt(base_amt)
         i_d = 1 if tx_type in ("CASH-DEPOSIT", "CHECK-DEPOSIT", "FRAGMENTED_DEPOSIT") else 0
         i_e = 1 if tx_type in ("FRAGMENTED_WITHDRAWAL",) else 0
