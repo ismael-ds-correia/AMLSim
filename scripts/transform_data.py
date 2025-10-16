@@ -102,20 +102,6 @@ def build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_loo
         cpf_cnpj_od = ""
         nome_pessoa_od = ""
 
-        if orig_acct:
-            acct_info = enrich_account_info(orig_acct, accounts_lookup, alert_acct_lookup)
-            numero_conta = orig_acct
-            if acct_info:
-                nome_banco = safe_str(acct_info.get("bank_id", acct_info.get("bank", "")))
-                cpf_cnpj_titular = safe_str(acct_info.get("ssn", ""))
-                fn = safe_str(acct_info.get("first_name", ""))
-                ln = safe_str(acct_info.get("last_name", ""))
-                if not (fn or ln):
-                    acct_name = safe_str(acct_info.get("acct_name", ""))
-                    nome_titular = acct_name if acct_name else ""
-                else:
-                    nome_titular = (fn + " " + ln).strip()
-
         if bene_acct:
             acct_info = enrich_account_info(bene_acct, accounts_lookup, alert_acct_lookup)
             numero_conta_od = bene_acct
@@ -224,6 +210,23 @@ def build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_loo
 
         base_amt = tx.get("base_amt", "")
         tx_type = safe_str(tx.get("tx_type", "")).upper()
+
+        if tx_type == "CASH-OUT":
+            numero_conta = bene_acct
+            cpf_cnpj_titular = cpf_cnpj_od
+            nome_titular = nome_pessoa_od
+            # Campos OD ficam vazios
+            numero_conta_od = ""
+            cpf_cnpj_od = ""
+            nome_pessoa_od = ""
+        else:
+            if orig_acct:
+                numero_conta = orig_acct
+            elif bene_acct:
+                numero_conta = bene_acct
+            else:
+                numero_conta = ""
+
         valor_transacao = format_base_amt(base_amt)
         i_d = 0
         i_e = 0
