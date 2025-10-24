@@ -1,9 +1,12 @@
 package amlsim.model.normal;
 
-import amlsim.*;
-import amlsim.model.AbstractTransactionModel;
+import java.util.List;
+import java.util.Random;
 
-import java.util.*;
+import amlsim.Account;
+import amlsim.AccountGroup;
+import amlsim.TargetedTransactionAmount;
+import amlsim.model.AbstractTransactionModel;
 
 /**
  * Distribute money to multiple neighboring accounts (fan-out)

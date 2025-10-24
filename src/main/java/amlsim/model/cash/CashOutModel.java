@@ -47,11 +47,17 @@ public class CashOutModel extends CashModel {
 
     @Override
     public void makeTransaction(long step) {
-//        List<AMLTransaction> txs = new ArrayList<>();
         if(isNextStep(step)){
             Branch branch = account.getBranch();
-            float amount = computeAmount();
-            makeTransaction(step, amount, branch, account, "CASH-OUT");
+            int minTx = 1;
+            int maxTx = 500;
+            double alpha = 2.2;
+            int eachCount = samplePowerLaw(minTx, maxTx, alpha, rand);
+
+            for(int i = 0; i < eachCount; i++) {
+                float amount = computeAmount();
+                makeTransaction(step, amount, branch, account, "CASH-OUT");
+            }
         }
     }
 

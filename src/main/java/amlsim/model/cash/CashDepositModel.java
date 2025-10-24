@@ -26,7 +26,6 @@ public class CashDepositModel extends CashModel {
     }
 
     private boolean isNextStep(long step){
-        // Implemente sua lógica de agendamento aqui, se necessário
         return false;
     }
 
@@ -47,8 +46,15 @@ public class CashDepositModel extends CashModel {
     public void makeTransaction(long step) {
         if(isNextStep(step)){
             Branch branch = account.getBranch();
-            float amount = computeAmount();
-            makeTransaction(step, amount, account, branch, "CASH-DEPOSIT");
+            int minTx = 1;
+            int maxTx = 500; // ajuste conforme desejado
+            double alpha = 2.2;
+            int eachCount = samplePowerLaw(minTx, maxTx, alpha, rand);
+
+            for(int i = 0; i < eachCount; i++) {
+                float amount = computeAmount();
+                makeTransaction(step, amount, account, branch, "CASH-DEPOSIT");
+            }
         }
     }
 

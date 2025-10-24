@@ -1,8 +1,10 @@
 package amlsim.model;
 
+import java.util.Random;
+
+import amlsim.AMLSim;
 import amlsim.Account;
 import amlsim.AccountGroup;
-import amlsim.AMLSim;
 
 /**
  * Base class of transaction models
@@ -142,4 +144,23 @@ public abstract class AbstractTransactionModel {
     protected void makeTransaction(long step, double amount, Account orig, Account dest){
         makeTransaction(step, amount, orig, dest, false, -1);
     }
+
+    /**
+     * Gera um número aleatório seguindo uma lei de potência (power law)
+     * @param min Valor mínimo (ex: 1 transação)
+     * @param max Valor máximo (ex: 100 transações)
+     * @param alpha Expoente da lei de potência (ex: 2.2)
+     * @param rand Random
+     * @return Número sorteado
+     */
+    protected static int samplePowerLaw(int min, int max, double alpha, Random rand) {
+        double r = rand.nextDouble();
+        double amin = Math.pow(min, 1 - alpha);
+        double amax = Math.pow(max, 1 - alpha);
+        double val = Math.pow(amin + (amax - amin) * r, 1.0 / (1 - alpha));
+        int result = Math.max(min, Math.min(max, (int)Math.round(val)));
+        return result;
+    }
+
 }
+

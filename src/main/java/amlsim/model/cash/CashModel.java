@@ -39,4 +39,21 @@ public abstract class CashModel extends AbstractTransactionModel {
     // Abstract methods from TransactionModel
     public abstract String getModelName();  // Get transaction type description
     public abstract void makeTransaction(long step);  // Create and add transactions
+
+    /**
+     * Gera um número aleatório seguindo uma lei de potência
+     * @param min Valor mínimo (ex: 1 transação)
+     * @param max Valor máximo (ex: 10 transações)
+     * @param alpha Expoente da lei de potência (ex: 2.2)
+     * @param rand Random
+     * @return Número sorteado
+     */
+    protected static int samplePowerLaw(int min, int max, double alpha, Random rand) {
+        double r = rand.nextDouble();
+        double amin = Math.pow(min, 1 - alpha);
+        double amax = Math.pow(max, 1 - alpha);
+        double val = Math.pow(amin + (amax - amin) * r, 1.0 / (1 - alpha));
+        int result = Math.max(min, Math.min(max, (int)Math.round(val)));
+        return result;
+    }
 }

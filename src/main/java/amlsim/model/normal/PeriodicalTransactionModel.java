@@ -51,8 +51,14 @@ public class PeriodicalTransactionModel extends AbstractTransactionModel {
             index = 0;
         }
 
-        int totalCount = getNumberOfTransactions();  // Total number of transactions
-        int eachCount = (numDests < totalCount) ? 1 : numDests / totalCount;
+
+        // Parâmetros da lei de potência
+        int minTx = 1;
+        int maxTx = Math.max(1, numDests); // máximo: número de beneficiários
+        double alpha = 2.2;
+
+        // Sorteia o número de transações para este dia
+        int eachCount = samplePowerLaw(minTx, maxTx, alpha, random);
 
         TargetedTransactionAmount transactionAmount = new TargetedTransactionAmount(account.getBalance() / eachCount, random);
 
