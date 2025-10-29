@@ -129,6 +129,18 @@ def build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_loo
         i_d = 1 if tx_type in ("CASH-DEPOSIT", "CHECK-DEPOSIT", "FRAGMENTED_DEPOSIT") else 0
         i_e = 1 if tx_type in ("FRAGMENTED_WITHDRAWAL",) else 0
 
+        titular_acct = orig_acct if orig_acct else bene_acct
+        acct_info = enrich_account_info(titular_acct, accounts_lookup, alert_acct_lookup)
+        if acct_info:
+            cpf_cnpj_titular = safe_str(acct_info.get("ssn", ""))
+            fn = safe_str(acct_info.get("first_name", ""))
+            ln = safe_str(acct_info.get("last_name", ""))
+            if not (fn or ln):
+                acct_name = safe_str(acct_info.get("acct_name", ""))
+                nome_titular = acct_name if acct_name else ""
+            else:
+                nome_titular = (fn + " " + ln).strip()
+
         data_lancamento = safe_str(tx.get("tran_timestamp", ""))
 
         if tx_type == "CHECK-DEPOSIT":

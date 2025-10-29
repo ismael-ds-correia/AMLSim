@@ -15,13 +15,13 @@ import amlsim.model.cash.CashDepositModel;
  */
 public class FragmentedDepositTypology extends AMLTypology {
 
-    private static final double LEGAL_LIMIT = 50000.0;      // Limite legal para depósito único
-    private static final double MAX_TOTAL = 100000.0;       // Valor máximo sorteado para depósito total
+    private static final double LEGAL_LIMIT = 50000.0; // Limite legal para depósito único
+    private static final double MAX_TOTAL = 100000.0; // Valor máximo sorteado para depósito total
 
-    private Account targetAccount;                          // Conta que receberá os depósitos
-    private List<Long> depositSteps = new ArrayList<>();     // Passos de simulação para cada depósito
+    private Account targetAccount; // Conta que receberá os depósitos
+    private List<Long> depositSteps = new ArrayList<>(); // Passos de simulação para cada depósito
     private List<Double> depositAmounts = new ArrayList<>(); // Valores de cada depósito fracionado
-    private double totalDeposit = 0.0;                      // Valor total a ser depositado
+    private double totalDeposit = 0.0; // Valor total a ser depositado
     private List<Integer> depositHours = new ArrayList<>();
 
     private Random random = AMLSim.getRandom();
@@ -41,31 +41,51 @@ public class FragmentedDepositTypology extends AMLTypology {
         // Sorteia o valor total a ser depositado (entre LEGAL_LIMIT e MAX_TOTAL)
         totalDeposit = LEGAL_LIMIT + random.nextDouble() * (MAX_TOTAL - LEGAL_LIMIT);
 
-        // Gera os depósitos fracionados
+        // Parâmetros da lei de potência para as frações
+        int minFrac = (int)(0.03 * LEGAL_LIMIT); // mínimo da fração
+        int maxFrac = (int)(0.15 * LEGAL_LIMIT); // máximo da fração
+        double alpha = 2.2;
+
+        depositAmounts.clear();
+        depositSteps.clear();
+        depositHours.clear();
+
+        // 1. Sorteia o tamanho da faixa de dias consecutivos (ex: 1 a 5)
+        int minWindow = 2;
+        int maxWindow = 5;
+        int windowSize = minWindow + random.nextInt(maxWindow - minWindow + 1);
+
+        // 2. Sorteia o dia inicial da faixa dentro do intervalo permitido
+        int stepRange = (int)(endStep - startStep + 1);
+        if (windowSize > stepRange) {
+            windowSize = stepRange; // Garante que não ultrapasse o intervalo
+        }
+        long windowStart = startStep + random.nextInt(stepRange - windowSize + 1);
+
+        // 3. Gera os dias consecutivos da faixa
+        List<Long> windowDays = new ArrayList<>();
+        for (int i = 0; i < windowSize; i++) {
+            windowDays.add((long)(windowStart + i));
+        }
+
+        // 4. Sorteia as fragmentações e distribui nos dias da faixa
         double deposited = 0.0;
-
+        int dayIndex = 0;
         while (deposited < totalDeposit) {
-            // Fração entre 15% e 25% do limite legal
-            double minFrac = 0.15 * LEGAL_LIMIT;
-            double maxFrac = 0.25 * LEGAL_LIMIT;
-            double fraction = minFrac + random.nextDouble() * (maxFrac - minFrac);
-
-            // Ajusta o valor do último depósito se necessário
+            int fraction = samplePowerLaw(minFrac, maxFrac, alpha, random);
             double remaining = totalDeposit - deposited;
             double depositValue = Math.min(fraction, remaining);
 
             depositAmounts.add(depositValue);
 
-            // Sorteia o dia do depósito dentro do intervalo
-            int stepRange = (int)(endStep - startStep + 1);
-            long depositStep = startStep + random.nextInt(stepRange);
+            // Distribui nos dias consecutivos (cicla se tiver mais fragmentos que dias)
+            long depositStep = windowDays.get(dayIndex % windowDays.size());
             depositSteps.add(depositStep);
 
-            // Sorteia hora entre 6 e 18
-            int hour = 6 + random.nextInt(13);
-            depositHours.add(hour);
+            depositHours.add(0); // Hora não usada
 
             deposited += depositValue;
+            dayIndex++;
         }
     }
 
