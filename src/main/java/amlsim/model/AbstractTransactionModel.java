@@ -154,12 +154,22 @@ public abstract class AbstractTransactionModel {
      * @return Número sorteado
      */
     protected static int samplePowerLaw(int min, int max, double alpha, Random rand) {
+        // Permite min > max (intervalo decrescente)
+        int low = Math.min(min, max);
+        int high = Math.max(min, max);
+
         double r = rand.nextDouble();
-        double amin = Math.pow(min, 1 - alpha);
-        double amax = Math.pow(max, 1 - alpha);
+        double amin = Math.pow(low, 1 - alpha);
+        double amax = Math.pow(high, 1 - alpha);
         double val = Math.pow(amin + (amax - amin) * r, 1.0 / (1 - alpha));
-        int result = Math.max(min, Math.min(max, (int)Math.round(val)));
-        return result;
+
+        // Se min > max, inverta o resultado dentro do intervalo
+        if (min > max) {
+            val = high - (val - low);
+        }
+        // Garante que está dentro do intervalo
+        val = Math.max(low, Math.min(high, val));
+        return (int)Math.round(val);
     }
 
 }

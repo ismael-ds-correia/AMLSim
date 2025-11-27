@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-csv_file = '../outputs/my_simulation2/transactions_output.csv'
+csv_file = '../outputs/my_simulation2/sintetic_v0_4.csv'
 
 df = pd.read_csv(csv_file)
 

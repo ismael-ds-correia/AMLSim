@@ -16,6 +16,7 @@ from io import StringIO
 import argparse
 import logging
 import pandas as pd
+import numpy as np
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
@@ -296,6 +297,185 @@ def build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_loo
     ]
     return pd.DataFrame(rows, columns=cols)
 
+def assign_ramo_atividade_empirical(
+    df,
+    n_ramos=7,
+    v=0.7,
+    a=1.0,
+    b=2.0,
+    q0=None,
+    q1_d=None,
+    q1_e=None,
+    seed=42
+):
+    """
+    Atribui um ramo_atividade para cada conta, com viés diferente para I-d e I-e.
+    Parâmetros:
+        df: DataFrame de transações (já com I-d e I-e)
+        n_ramos: número de ramos possíveis (ex: 7)
+        v: intensidade do viés [0,1]
+        a, b: smoothing para tilde_p
+        q0: distribuição base
+        q1_d: distribuição fraude para I-d
+        q1_e: distribuição fraude para I-e
+        seed: semente para reprodutibilidade
+    Retorna:
+        dict: {conta: ramo_atividade}
+    """
+    rng = np.random.default_rng(seed)
+
+    q0 = np.array(q0, dtype=float)
+    q0 = q0 / q0.sum()
+    q1_d = np.array(q1_d, dtype=float)
+    q1_d = q1_d / q1_d.sum()
+    q1_e = np.array(q1_e, dtype=float)
+    q1_e = q1_e / q1_e.sum()
+
+    df = df.copy()
+    df["_y_d"] = (df["I-d"] == 1).astype(int)
+    df["_y_e"] = (df["I-e"] == 1).astype(int)
+
+    conta2tx = df.groupby("NUMERO_CONTA")[["_y_d", "_y_e"]].agg(["sum", "count"])
+    conta2ramo = {}
+    for conta, row in conta2tx.iterrows():
+        F_d = row[("_y_d", "sum")]
+        F_e = row[("_y_e", "sum")]
+        N = row[("_y_d", "count")]
+
+        tilde_p_d = (F_d + a) / (N + b)
+        tilde_p_e = (F_e + a) / (N + b)
+
+        if tilde_p_d > tilde_p_e:
+            w = v * tilde_p_d
+            q1 = q1_d
+        elif tilde_p_e > tilde_p_d:
+            w = v * tilde_p_e
+            q1 = q1_e
+        else:
+            w = v * tilde_p_d
+            q1 = 0.5 * (q1_d + q1_e)
+
+        P = (1 - w) * q0 + w * q1
+        P = np.clip(P, 0, None)
+        sumP = P.sum()
+        if sumP == 0:
+            P = q0.copy()
+        else:
+            P = P / sumP
+
+        ramo = rng.choice(np.arange(1, n_ramos+1), p=P)
+        conta2ramo[conta] = ramo
+
+    return conta2ramo
+
+def assign_ramo_atividade_targets(
+    df,
+    n_ramos=7,
+    target_norm=None,
+    target_d=None,
+    target_e=None,
+    a=1.0,
+    b=2.0,
+    seed=42,
+    p_fixed_norm=None,
+    p_fixed_d=None,
+    p_fixed_e=None,
+    return_df=False
+):
+    """
+    Atribui ramo_atividade por conta, misturando uniforme e concentração em ramos-alvo.
+    Parâmetros:
+        df: DataFrame de transações (com colunas NUMERO_CONTA, I-d, I-e)
+        n_ramos: número de ramos possíveis (N)
+        target_norm, target_d, target_e: listas de ramos-alvo (valores 1..N) para cada tipo
+        a, b: smoothing para tilde_p
+        seed: semente RNG
+        p_fixed_norm/e/d: valor fixo para p_t do tipo correspondente (obrigatório)
+        return_df: se True, retorna também df com coluna 'ramo_atividade'
+    Retorna:
+        conta2ramo: dict {NUMERO_CONTA -> ramo_atividade (1..N)}
+        (opcional) df atualizado
+    """
+    rng = np.random.default_rng(seed)
+    df = df.copy()
+    df["_y_d"] = (df["I-d"] == 1).astype(int)
+    df["_y_e"] = (df["I-e"] == 1).astype(int)
+
+    # Validação e preparação dos targets
+    def clean_targets(target, n_ramos):
+        if target is None:
+            return []
+        return [int(k) for k in target if isinstance(k, (int, np.integer)) and 1 <= int(k) <= n_ramos]
+
+    target_norm = clean_targets(target_norm, n_ramos)
+    target_d = clean_targets(target_d, n_ramos)
+    target_e = clean_targets(target_e, n_ramos)
+
+    # Função para criar vetor r_t
+    def make_r_vector(target_list, n_ramos):
+        if not target_list:
+            return np.full(n_ramos, 1.0 / n_ramos)
+        r = np.zeros(n_ramos)
+        m = len(target_list)
+        for j in target_list:
+            r[j-1] = 1.0 / m  # j é 1-based
+        return r
+
+    r_norm = make_r_vector(target_norm, n_ramos)
+    r_d = make_r_vector(target_d, n_ramos)
+    r_e = make_r_vector(target_e, n_ramos)
+
+    conta2tx = df.groupby("NUMERO_CONTA")[["_y_d", "_y_e"]].agg(["sum", "count"])
+    conta2ramo = {}
+    for conta, row in conta2tx.iterrows():
+        F_d = row[("_y_d", "sum")]
+        F_e = row[("_y_e", "sum")]
+        N_c = row[("_y_d", "count")]
+
+        # Determinar tipo predominante
+        if F_d + F_e == 0:
+            t = "norm"
+            r = r_norm
+            p_fixed = p_fixed_norm
+        elif F_d > F_e:
+            t = "d"
+            r = r_d
+            p_fixed = p_fixed_d
+        elif F_e > F_d:
+            t = "e"
+            r = r_e
+            p_fixed = p_fixed_e
+        else:
+            t = "norm"
+            r = r_norm
+            p_fixed = p_fixed_norm
+
+        # Calcular p_t (obrigatório)
+        if p_fixed is None:
+            raise ValueError(f"Parâmetro p_fixed_{t} deve ser fornecido.")
+        p_t = float(p_fixed)
+        p_t = min(max(p_t, 0), 1)
+
+        # Construir vetor de probabilidades
+        uniform_prob = 1.0 / n_ramos
+        P = (1 - p_t) * np.full(n_ramos, uniform_prob) + p_t * r
+
+        # Normalizar
+        S = P.sum()
+        if S == 0:
+            P = np.full(n_ramos, 1.0 / n_ramos)
+        else:
+            P = P / S
+
+        ramo = rng.choice(np.arange(1, n_ramos+1), p=P)
+        conta2ramo[conta] = ramo
+
+    if return_df:
+        df["ramo_atividade"] = df["NUMERO_CONTA"].map(conta2ramo)
+        return conta2ramo, df
+    else:
+        return conta2ramo
+
 def main():
     parser = argparse.ArgumentParser(description="Transforma dados do AMLSim em CSV de transações.")
     parser.add_argument(
@@ -305,7 +485,7 @@ def main():
     parser.add_argument(
         "-o", "--out",
         default=None,
-        help="Arquivo de saída CSV (padrão: <data-dir>/transactions_output.csv)"
+        help="Arquivo de saída CSV (padrão: <data-dir>/sintetic_v0_4.csv)"
     )
     args = parser.parse_args()
 
@@ -318,7 +498,7 @@ def main():
     cash_tx_file = os.path.join(data_dir, "cash_tx.csv")
     accounts_file = os.path.join(data_dir, "accounts.csv")
     alert_accounts_file = os.path.join(data_dir, "alert_accounts.csv")
-    out_file = args.out if args.out else os.path.join(data_dir, "transactions_output.csv")
+    out_file = args.out if args.out else os.path.join(data_dir, "sintetic_v0_4.csv")
 
     if not os.path.isfile(alert_tx_file):
         logging.error("Arquivo obrigatório não encontrado: %s", alert_tx_file)
@@ -359,6 +539,21 @@ def main():
 
     logging.info("Construindo linhas de saída...")
     out_df = build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_lookup)
+    # Atribui ramo_atividade enviesado por conta
+    conta2ramo = assign_ramo_atividade_targets(
+        out_df,
+        n_ramos=7,
+        p_fixed_d=0,         # viés fixo para I-d
+        p_fixed_norm=0,      # viés fixo para normais
+        p_fixed_e=0,         # viés fixo para I-e (opcional)
+        target_norm=[1],
+        target_d=[4],
+        target_e=[7],
+        a=1.0,
+        b=2.0,
+        seed=42
+    )
+    out_df["RAMO_ATIVIDADE_1"] = out_df["NUMERO_CONTA"].map(conta2ramo)
 
     logging.info("Gravando arquivo de saída: %s", out_file)
     out_df.to_csv(out_file, index=False, encoding="utf-8")

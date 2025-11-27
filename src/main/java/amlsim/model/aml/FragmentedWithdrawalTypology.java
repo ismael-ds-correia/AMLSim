@@ -36,51 +36,61 @@ public class FragmentedWithdrawalTypology extends AMLTypology {
             targetAccount = alert.getMembers().get(0);
         }
 
-        // Sorteia o valor total a ser sacado (entre LEGAL_LIMIT e MAX_TOTAL)
-        totalWithdrawal = LEGAL_LIMIT + random.nextDouble() * (MAX_TOTAL - LEGAL_LIMIT);
-
-        // Parâmetros da lei de potência para as frações
-        int minFrac = (int)(0.03 * LEGAL_LIMIT); // mínimo da fração
-        int maxFrac = (int)(0.15 * LEGAL_LIMIT); // máximo da fração
-        double alpha = 2.2;
-
         withdrawalAmounts.clear();
         withdrawalSteps.clear();
 
-        // 1. Sorteia o tamanho da faixa de dias consecutivos (ex: 1 a 5)
-        int minWindow = 2;
-        int maxWindow = 5;
-        int windowSize = minWindow + random.nextInt(maxWindow - minWindow + 1);
+        // Parâmetros da lei de potência
+        int minFrac = (int)(0.05 * LEGAL_LIMIT);
+        int maxFrac = (int)(0.25 * LEGAL_LIMIT);
+        double alpha = 2.2;
 
-        // 2. Sorteia o dia inicial da faixa dentro do intervalo permitido
-        int stepRange = (int)(endStep - startStep + 1);
-        if (windowSize > stepRange) {
-            windowSize = stepRange; // Garante que não ultrapasse o intervalo
-        }
-        long windowStart = startStep + random.nextInt(stepRange - windowSize + 1);
+        // Sorteia o número de ciclos de fragmentação por conta
+        int minCycles = 10;
+        int maxCycles = 30;
+        int numCycles = samplePowerLaw(minCycles, maxCycles, alpha, random);
 
-        // 3. Gera os dias consecutivos da faixa
-        List<Long> windowDays = new ArrayList<>();
-        for (int i = 0; i < windowSize; i++) {
-            windowDays.add((long)(windowStart + i));
-        }
+        int minWindow = 1;
+        int maxWindow = 10;
 
-        // 4. Sorteia as fragmentações e distribui nos dias da faixa
-        double withdrawn = 0.0;
-        int dayIndex = 0;
-        while (withdrawn < totalWithdrawal) {
-            int fraction = samplePowerLaw(minFrac, maxFrac, alpha, random);
-            double remaining = totalWithdrawal - withdrawn;
-            double withdrawalValue = Math.min(fraction, remaining);
+        // Mantém os dias já usados para evitar sobreposição
+        int usedStep = (int)startStep;
 
-            withdrawalAmounts.add(withdrawalValue);
+        for (int cycle = 0; cycle < numCycles; cycle++) {
+            // Sorteia o valor total a ser sacado neste ciclo
+            double totalWithdrawal = LEGAL_LIMIT + random.nextDouble() * (MAX_TOTAL - LEGAL_LIMIT);
 
-            // Distribui nos dias consecutivos (cicla se tiver mais fragmentos que dias)
-            long withdrawalStep = windowDays.get(dayIndex % windowDays.size());
-            withdrawalSteps.add(withdrawalStep);
+            // Sorteia o tamanho da faixa de dias consecutivos
+            int windowSize = samplePowerLaw(minWindow, maxWindow, alpha, random);
 
-            withdrawn += withdrawalValue;
-            dayIndex++;
+            // Sorteia o início da faixa (garante que não ultrapasse o intervalo)
+            if (usedStep + windowSize > endStep) {
+                usedStep = (int)startStep; // Se acabar os dias, reinicia
+            }
+            long windowStart = usedStep;
+            usedStep += windowSize; // Atualiza para o próximo ciclo
+
+            // Gera os dias consecutivos da faixa
+            List<Long> windowDays = new ArrayList<>();
+            for (int i = 0; i < windowSize; i++) {
+                windowDays.add(windowStart + i);
+            }
+
+            // Fragmenta o valor e distribui nos dias da faixa
+            double withdrawn = 0.0;
+            int dayIndex = 0;
+            while (withdrawn < totalWithdrawal) {
+                int fraction = samplePowerLaw(minFrac, maxFrac, alpha, random);
+                double remaining = totalWithdrawal - withdrawn;
+                double withdrawalValue = Math.min(fraction, remaining);
+
+                withdrawalAmounts.add(withdrawalValue);
+
+                long withdrawalStep = windowDays.get(dayIndex % windowDays.size());
+                withdrawalSteps.add(withdrawalStep);
+
+                withdrawn += withdrawalValue;
+                dayIndex++;
+            }
         }
     }
 

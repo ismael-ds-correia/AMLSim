@@ -54,7 +54,7 @@ public class CashInModel extends CashModel {
             // Parâmetros da lei de potência
             int minTx = 1;
             int maxTx = 500;
-            double alpha = 2.2;
+            double alpha = 2.5;
             int eachCount = samplePowerLaw(minTx, maxTx, alpha, rand);
 
             for(int i = 0; i < eachCount; i++) {

@@ -55,7 +55,7 @@ public class PeriodicalTransactionModel extends AbstractTransactionModel {
         // Parâmetros da lei de potência
         int minTx = 1;
         int maxTx = Math.max(1, numDests); // máximo: número de beneficiários
-        double alpha = 2.2;
+        double alpha = 2.5;
 
         // Sorteia o número de transações para este dia
         int eachCount = samplePowerLaw(minTx, maxTx, alpha, random);
