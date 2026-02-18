@@ -2,7 +2,7 @@
   "general": {
     "random_seed": 0,
     "simulation_name": "my_simulation2",
-    "total_steps": 720,
+    "total_steps": 360,
     "base_date": "2017-01-01"
   },
   "default": {

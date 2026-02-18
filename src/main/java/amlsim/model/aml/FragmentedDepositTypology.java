@@ -15,8 +15,8 @@ import amlsim.model.cash.CashDepositModel;
  */
 public class FragmentedDepositTypology extends AMLTypology {
 
-    private static final double LEGAL_LIMIT = 50000.0; // Limite legal para depósito único
-    private static final double MAX_TOTAL = 100000.0; // Valor máximo sorteado para depósito total
+    private static final double LEGAL_LIMIT = 6000.0; // Limite legal para depósito único
+    private static final double MAX_TOTAL = 20000.0; // Valor máximo sorteado para depósito total
 
     private Account targetAccount; // Conta que receberá os depósitos
     private List<Long> depositSteps = new ArrayList<>(); // Passos de simulação para cada depósito
@@ -41,59 +41,62 @@ public class FragmentedDepositTypology extends AMLTypology {
         depositSteps.clear();
         depositHours.clear();
 
-        // Parâmetros da lei de potência
-        int minFrac = (int)(0.05 * LEGAL_LIMIT);
-        int maxFrac = (int)(0.25 * LEGAL_LIMIT);
-        double alpha = 2.2;
+        int minFrac = (int)(0.0007 * LEGAL_LIMIT);
+        int maxFrac = (int)(0.030 * LEGAL_LIMIT);
+        double alphaFrac = 2.7;
 
-        // Sorteia o número de ciclos de fragmentação por conta
-        int minCycles = 10;
-        int maxCycles = 30;
-        int numCycles = samplePowerLaw(minCycles, maxCycles, alpha, random);
+        // Parâmetros da power law para o saldo líquido diário
+        double minDay = 800.0;
+        double maxDay = 50000.0;
+        double alphaDay = 1.6;
 
-        int minWindow = 1;
-        int maxWindow = 10;
+        int minCycles = 3;
+        int maxCycles = 40;
+        int numCycles = samplePowerLaw(minCycles, maxCycles, 1.5, random);
 
-        // Mantém os dias já usados para evitar sobreposição
+        int minWindow = 3;
+        int maxWindow = 15;
+        double alphaWindow = 1.5;
+
         int usedStep = (int)startStep;
 
         for (int cycle = 0; cycle < numCycles; cycle++) {
-            // Sorteia o valor total a ser depositado neste ciclo
-            double totalDeposit = LEGAL_LIMIT + random.nextDouble() * (MAX_TOTAL - LEGAL_LIMIT);
+            int windowSize = samplePowerLaw(minWindow, maxWindow, alphaWindow, random);
 
-            // Sorteia o tamanho da faixa de dias consecutivos
-            int windowSize = samplePowerLaw(minWindow, maxWindow, alpha, random);
-
-            // Sorteia o início da faixa (garante que não ultrapasse o intervalo)
             if (usedStep + windowSize > endStep) {
-                usedStep = (int)startStep; // Se acabar os dias, reinicia
+                usedStep = (int)startStep;
             }
             long windowStart = usedStep;
-            usedStep += windowSize; // Atualiza para o próximo ciclo
+            usedStep += windowSize;
 
-            // Gera os dias consecutivos da faixa
             List<Long> windowDays = new ArrayList<>();
             for (int i = 0; i < windowSize; i++) {
                 windowDays.add(windowStart + i);
             }
 
-            // Fragmenta o valor e distribui nos dias da faixa
-            double deposited = 0.0;
-            int dayIndex = 0;
-            while (deposited < totalDeposit) {
-                int fraction = samplePowerLaw(minFrac, maxFrac, alpha, random);
-                double remaining = totalDeposit - deposited;
-                double depositValue = Math.min(fraction, remaining);
+            // Para cada dia da janela, sorteia o valor diário pela power law
+            for (int i = 0; i < windowSize; i++) {
+                double r = random.nextDouble();
+                // Power law invertida
+                double powMin = Math.pow(minDay, 1.0 - alphaDay);
+                double powMax = Math.pow(maxDay, 1.0 - alphaDay);
+                double value = Math.pow(powMin + r * (powMax - powMin), 1.0 / (1.0 - alphaDay));
 
-                depositAmounts.add(depositValue);
-
-                long depositStep = windowDays.get(dayIndex % windowDays.size());
-                depositSteps.add(depositStep);
-
-                depositHours.add(0);
-
-                deposited += depositValue;
-                dayIndex++;
+                // Fragmenta o valor diário em frações menores (também por power law)
+                double deposited = 0.0;
+                List<Double> frags = new ArrayList<>();
+                while (deposited < value) {
+                    int fraction = samplePowerLaw(minFrac, maxFrac, alphaFrac, random);
+                    double remaining = value - deposited;
+                    double depositValue = Math.min(fraction, remaining);
+                    frags.add(depositValue);
+                    deposited += depositValue;
+                }
+                for (double val : frags) {
+                    depositAmounts.add(val);
+                    depositSteps.add(windowDays.get(i));
+                    depositHours.add(0);
+                }
             }
         }
     }

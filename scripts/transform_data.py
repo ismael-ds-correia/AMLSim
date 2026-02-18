@@ -476,6 +476,71 @@ def assign_ramo_atividade_targets(
     else:
         return conta2ramo
 
+def assign_ramo_atividade_group_size(
+    df,
+    n_ramos=7,
+    target_ramo=1,
+    v=0.0,
+    seed=42,
+    return_df=False
+):
+    """
+    Group size bias (marginal) controlado com 1 ramo-alvo.
+
+    Interpretação de v:
+      - v=0   -> uniforme (1/n_ramos para cada ramo)
+      - v=1   -> 100% das contas no ramo-alvo
+      - 0<v<1 -> mistura: q_eff = (1-v)*uniforme + v*delta_alvo
+
+    Atribui por CONTA (não por transação) e controla proporções globais via contagens
+    (com aleatoriedade apenas no embaralhamento final).
+    """
+    if "NUMERO_CONTA" not in df.columns:
+        raise ValueError("df deve conter a coluna 'NUMERO_CONTA'.")
+
+    rng = np.random.default_rng(seed)
+
+    target_ramo = int(target_ramo)
+    if not (1 <= target_ramo <= n_ramos):
+        raise ValueError(f"target_ramo deve estar em 1..{n_ramos}.")
+
+    v = float(v)
+    v = min(max(v, 0.0), 1.0)
+
+    # Distribuição efetiva: (1-v)*uniforme + v*delta_alvo
+    uniform = np.full(n_ramos, 1.0 / n_ramos, dtype=float)
+    delta = np.zeros(n_ramos, dtype=float)
+    delta[target_ramo - 1] = 1.0
+    q_eff = (1.0 - v) * uniform + v * delta
+    q_eff = q_eff / q_eff.sum()
+
+    # Universo de contas (por conta, não por transação)
+    contas = pd.Series(df["NUMERO_CONTA"]).dropna().astype(str).unique()
+    n = len(contas)
+    if n == 0:
+        return ({}, df.copy()) if return_df else {}
+
+    # Contagens globais com ajuste por "maiores restos"
+    raw = q_eff * n
+    counts = np.floor(raw).astype(int)
+    rem = n - counts.sum()
+    if rem > 0:
+        frac = raw - np.floor(raw)
+        order = np.argsort(-frac)
+        for idx in order[:rem]:
+            counts[idx] += 1
+
+    labels = np.concatenate([np.full(counts[k], k + 1, dtype=int) for k in range(n_ramos)])
+    rng.shuffle(labels)
+
+    conta2ramo = {conta: int(ramo) for conta, ramo in zip(contas, labels)}
+
+    if return_df:
+        out = df.copy()
+        out["ramo_atividade"] = out["NUMERO_CONTA"].astype(str).map(conta2ramo)
+        return conta2ramo, out
+    return conta2ramo
+
 def main():
     parser = argparse.ArgumentParser(description="Transforma dados do AMLSim em CSV de transações.")
     parser.add_argument(
@@ -485,7 +550,7 @@ def main():
     parser.add_argument(
         "-o", "--out",
         default=None,
-        help="Arquivo de saída CSV (padrão: <data-dir>/sintetic_v0_4.csv)"
+        help="Arquivo de saída CSV (padrão: <data-dir>/sintetic_v0.csv)"
     )
     args = parser.parse_args()
 
@@ -498,7 +563,7 @@ def main():
     cash_tx_file = os.path.join(data_dir, "cash_tx.csv")
     accounts_file = os.path.join(data_dir, "accounts.csv")
     alert_accounts_file = os.path.join(data_dir, "alert_accounts.csv")
-    out_file = args.out if args.out else os.path.join(data_dir, "sintetic_v0_4.csv")
+    out_file = args.out if args.out else os.path.join(data_dir, "sintetic_v0.csv")
 
     if not os.path.isfile(alert_tx_file):
         logging.error("Arquivo obrigatório não encontrado: %s", alert_tx_file)
@@ -539,7 +604,8 @@ def main():
 
     logging.info("Construindo linhas de saída...")
     out_df = build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_lookup)
-    # Atribui ramo_atividade enviesado por conta
+    # Atribui ramo_atividade enviesado por contapython3 scripts/convert_logs.py conf.json
+    
     conta2ramo = assign_ramo_atividade_targets(
         out_df,
         n_ramos=7,
@@ -551,8 +617,19 @@ def main():
         target_e=[7],
         a=1.0,
         b=2.0,
-        seed=42
+        seed=192
     )
+
+    """
+    # Group size bias (1 ramo-alvo + v)
+    conta2ramo = assign_ramo_atividade_group_size(
+        out_df,
+        n_ramos=7,
+        target_ramo=1,  # ramo-alvo
+        v=1,          # 0=uniforme, 1=sempre alvo
+        seed=99
+    )
+    """
     out_df["RAMO_ATIVIDADE_1"] = out_df["NUMERO_CONTA"].map(conta2ramo)
 
     logging.info("Gravando arquivo de saída: %s", out_file)

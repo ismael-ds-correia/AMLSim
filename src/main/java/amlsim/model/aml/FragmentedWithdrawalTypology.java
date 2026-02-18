@@ -14,8 +14,8 @@ import amlsim.model.cash.CashOutModel;
  */
 public class FragmentedWithdrawalTypology extends AMLTypology {
 
-    private static final double LEGAL_LIMIT = 50000.0;      // Limite legal para saque único
-    private static final double MAX_TOTAL = 100000.0;       // Valor máximo sorteado para saque total
+    private static final double LEGAL_LIMIT = 6000.0;      // Limite legal para saque único
+    private static final double MAX_TOTAL = 20000.0;       // Valor máximo sorteado para saque total
 
     private Account targetAccount;                          // Conta que fará os saques
     private List<Long> withdrawalSteps = new ArrayList<>();     // Passos de simulação para cada saque
@@ -30,7 +30,6 @@ public class FragmentedWithdrawalTypology extends AMLTypology {
 
     @Override
     public void setParameters(int modelID) {
-        // Seleciona a conta alvo (mainAccount ou primeira da lista)
         targetAccount = alert.getMainAccount();
         if (targetAccount == null && !alert.getMembers().isEmpty()) {
             targetAccount = alert.getMembers().get(0);
@@ -39,57 +38,62 @@ public class FragmentedWithdrawalTypology extends AMLTypology {
         withdrawalAmounts.clear();
         withdrawalSteps.clear();
 
-        // Parâmetros da lei de potência
-        int minFrac = (int)(0.05 * LEGAL_LIMIT);
-        int maxFrac = (int)(0.25 * LEGAL_LIMIT);
-        double alpha = 2.2;
+        int minFrac = (int)(0.0007 * LEGAL_LIMIT);
+        int maxFrac = (int)(0.030 * LEGAL_LIMIT);
+        double alphaFrac = 2.7;
 
-        // Sorteia o número de ciclos de fragmentação por conta
-        int minCycles = 10;
-        int maxCycles = 30;
-        int numCycles = samplePowerLaw(minCycles, maxCycles, alpha, random);
+        // Parâmetros da power law para o saldo líquido diário (negativos)
+        double minDay = -50000.0;
+        double maxDay = -800.0;
+        double alphaDay = 1.6;
 
-        int minWindow = 1;
-        int maxWindow = 10;
+        int minCycles = 3;
+        int maxCycles = 40;
+        int numCycles = samplePowerLaw(minCycles, maxCycles, 1.5, random);
 
-        // Mantém os dias já usados para evitar sobreposição
+        int minWindow = 3;
+        int maxWindow = 15;
+        double alphaWindow = 1.5;
+
         int usedStep = (int)startStep;
 
         for (int cycle = 0; cycle < numCycles; cycle++) {
-            // Sorteia o valor total a ser sacado neste ciclo
-            double totalWithdrawal = LEGAL_LIMIT + random.nextDouble() * (MAX_TOTAL - LEGAL_LIMIT);
+            int windowSize = samplePowerLaw(minWindow, maxWindow, alphaWindow, random);
 
-            // Sorteia o tamanho da faixa de dias consecutivos
-            int windowSize = samplePowerLaw(minWindow, maxWindow, alpha, random);
-
-            // Sorteia o início da faixa (garante que não ultrapasse o intervalo)
             if (usedStep + windowSize > endStep) {
-                usedStep = (int)startStep; // Se acabar os dias, reinicia
+                usedStep = (int)startStep;
             }
             long windowStart = usedStep;
-            usedStep += windowSize; // Atualiza para o próximo ciclo
+            usedStep += windowSize;
 
-            // Gera os dias consecutivos da faixa
             List<Long> windowDays = new ArrayList<>();
             for (int i = 0; i < windowSize; i++) {
                 windowDays.add(windowStart + i);
             }
 
-            // Fragmenta o valor e distribui nos dias da faixa
-            double withdrawn = 0.0;
-            int dayIndex = 0;
-            while (withdrawn < totalWithdrawal) {
-                int fraction = samplePowerLaw(minFrac, maxFrac, alpha, random);
-                double remaining = totalWithdrawal - withdrawn;
-                double withdrawalValue = Math.min(fraction, remaining);
+            // Para cada dia da janela, sorteia o valor diário pela power law (negativo)
+            for (int i = 0; i < windowSize; i++) {
+                double r = random.nextDouble();
+                // Power law invertida para valores negativos
+                double powMin = Math.pow(Math.abs(minDay), 1.0 - alphaDay);
+                double powMax = Math.pow(Math.abs(maxDay), 1.0 - alphaDay);
+                double value = Math.pow(powMin + r * (powMax - powMin), 1.0 / (1.0 - alphaDay));
+                value = -value; // Garante valor negativo
 
-                withdrawalAmounts.add(withdrawalValue);
-
-                long withdrawalStep = windowDays.get(dayIndex % windowDays.size());
-                withdrawalSteps.add(withdrawalStep);
-
-                withdrawn += withdrawalValue;
-                dayIndex++;
+                // Fragmenta o valor diário em frações menores (também por power law)
+                double withdrawn = 0.0;
+                List<Double> frags = new ArrayList<>();
+                while (withdrawn < Math.abs(value)) {
+                    int fraction = samplePowerLaw(minFrac, maxFrac, alphaFrac, random);
+                    double remaining = Math.abs(value) - withdrawn;
+                    double withdrawalValue = Math.min(fraction, remaining);
+                    frags.add(withdrawalValue);
+                    withdrawn += withdrawalValue;
+                }
+                for (double val : frags) {
+                    withdrawalAmounts.add(val);
+                    withdrawalSteps.add(windowDays.get(i));
+                }
             }
         }
     }
