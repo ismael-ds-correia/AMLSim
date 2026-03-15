@@ -67,3 +67,4 @@ buildNumber.properties
 # another folder that is ignored by vscode
 .settings/
 
+!jars/*.jar
