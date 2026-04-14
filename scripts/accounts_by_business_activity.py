@@ -54,14 +54,15 @@ def main():
           )
     )
     acct["Has_I-d_or_I-e"] = ((acct["any_d"] == 1) | (acct["any_e"] == 1))
-    acct["Tipologia"] = acct["Has_I-d_or_I-e"].map({False: "No I-d/I-e", True: "Any I-d/I-e"})
+    # English: 'Non-fraud' and 'Fraud'
+    acct["Tipologia"] = acct["Has_I-d_or_I-e"].map({False: "Non-fraud", True: "Fraud"})
 
     # Contar contas por ramo e tipologia
     counts = (
         acct.groupby(["RAMO_ATIVIDADE_1", "Tipologia"])
             .size()
             .unstack(fill_value=0)
-            .reindex(columns=["No I-d/I-e", "Any I-d/I-e"], fill_value=0)
+            .reindex(columns=["Non-fraud", "Fraud"], fill_value=0)
     )
 
     # Eixo x ordenado por ramo (1..N)
@@ -69,9 +70,10 @@ def main():
     counts.index = counts.index.astype(int)
 
     ax = counts.plot(kind="bar", figsize=(12, 6), width=0.85, color=["green", "orange"])
-    ax.set_xlabel("RAMO_ATIVIDADE_1")
+    ax.set_xlabel("Business activity branch")
     ax.set_ylabel("Number of accounts")
-    ax.set_title("Accounts per business activity (by account): No I-d/I-e vs Any I-d/I-e")
+    ax.set_title("Accounts per business activity (by account): Non-fraud vs Fraud")
+    ax.legend(title="Typology")
     plt.xticks(rotation=0)
     plt.tight_layout()
 

@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from collections import Counter
 
-csv_file = 'outputs/my_simulation2/sintetic_v0.csv'
+csv_file = 'outputs/my_simulation2/test_pd_v0_75.csv'
 
 df = pd.read_csv(csv_file)
 

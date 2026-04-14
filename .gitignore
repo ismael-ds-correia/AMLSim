@@ -68,3 +68,5 @@ buildNumber.properties
 .settings/
 
 !jars/*.jar
+
+gs.py

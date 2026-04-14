@@ -371,26 +371,21 @@ def assign_ramo_atividade_empirical(
 def assign_ramo_atividade_targets(
     df,
     n_ramos=7,
-    target_norm=None,
-    target_d=None,
-    target_e=None,
-    a=1.0,
-    b=2.0,
+    target_despriv=None,
+    v=0.0,
     seed=42,
-    p_fixed_norm=None,
-    p_fixed_d=None,
-    p_fixed_e=None,
     return_df=False
 ):
     """
-    Atribui ramo_atividade por conta, misturando uniforme e concentração em ramos-alvo.
+    Viés de prevalência simples:
+    - Contas com ao menos uma transação fragmentada (I-d=1 ou I-e=1) recebem mistura convexa entre uniforme global e uniforme nos ramos desprivilegiados.
+    - Demais contas recebem distribuição uniforme global.
     Parâmetros:
         df: DataFrame de transações (com colunas NUMERO_CONTA, I-d, I-e)
         n_ramos: número de ramos possíveis (N)
-        target_norm, target_d, target_e: listas de ramos-alvo (valores 1..N) para cada tipo
-        a, b: smoothing para tilde_p
+        target_despriv: lista de ramos-alvo do grupo desprivilegiado (valores 1..N)
+        v: intensidade do viés [0,1]
         seed: semente RNG
-        p_fixed_norm/e/d: valor fixo para p_t do tipo correspondente (obrigatório)
         return_df: se True, retorna também df com coluna 'ramo_atividade'
     Retorna:
         conta2ramo: dict {NUMERO_CONTA -> ramo_atividade (1..N)}
@@ -398,75 +393,33 @@ def assign_ramo_atividade_targets(
     """
     rng = np.random.default_rng(seed)
     df = df.copy()
-    df["_y_d"] = (df["I-d"] == 1).astype(int)
-    df["_y_e"] = (df["I-e"] == 1).astype(int)
+    # Identifica contas com ao menos uma transação fragmentada
+    conta2frag = df.groupby("NUMERO_CONTA").apply(lambda x: ((x["I-d"] == 1) | (x["I-e"] == 1)).any())
 
-    # Validação e preparação dos targets
-    def clean_targets(target, n_ramos):
-        if target is None:
-            return []
-        return [int(k) for k in target if isinstance(k, (int, np.integer)) and 1 <= int(k) <= n_ramos]
+    # Vetores de probabilidade
+    uniform = np.full(n_ramos, 1.0 / n_ramos)
+    if target_despriv is None or len(target_despriv) == 0:
+        r_despriv = uniform.copy()
+    else:
+        r_despriv = np.zeros(n_ramos)
+        m = len(target_despriv)
+        for j in target_despriv:
+            r_despriv[j-1] = 1.0 / m
 
-    target_norm = clean_targets(target_norm, n_ramos)
-    target_d = clean_targets(target_d, n_ramos)
-    target_e = clean_targets(target_e, n_ramos)
-
-    # Função para criar vetor r_t
-    def make_r_vector(target_list, n_ramos):
-        if not target_list:
-            return np.full(n_ramos, 1.0 / n_ramos)
-        r = np.zeros(n_ramos)
-        m = len(target_list)
-        for j in target_list:
-            r[j-1] = 1.0 / m  # j é 1-based
-        return r
-
-    r_norm = make_r_vector(target_norm, n_ramos)
-    r_d = make_r_vector(target_d, n_ramos)
-    r_e = make_r_vector(target_e, n_ramos)
-
-    conta2tx = df.groupby("NUMERO_CONTA")[["_y_d", "_y_e"]].agg(["sum", "count"])
+    contas = df["NUMERO_CONTA"].unique()
     conta2ramo = {}
-    for conta, row in conta2tx.iterrows():
-        F_d = row[("_y_d", "sum")]
-        F_e = row[("_y_e", "sum")]
-        N_c = row[("_y_d", "count")]
-
-        # Determinar tipo predominante
-        if F_d + F_e == 0:
-            t = "norm"
-            r = r_norm
-            p_fixed = p_fixed_norm
-        elif F_d > F_e:
-            t = "d"
-            r = r_d
-            p_fixed = p_fixed_d
-        elif F_e > F_d:
-            t = "e"
-            r = r_e
-            p_fixed = p_fixed_e
+    for conta in contas:
+        fez_frag = conta2frag.get(conta, False)
+        if fez_frag:
+            P = (1 - v) * uniform + v * r_despriv
         else:
-            t = "norm"
-            r = r_norm
-            p_fixed = p_fixed_norm
-
-        # Calcular p_t (obrigatório)
-        if p_fixed is None:
-            raise ValueError(f"Parâmetro p_fixed_{t} deve ser fornecido.")
-        p_t = float(p_fixed)
-        p_t = min(max(p_t, 0), 1)
-
-        # Construir vetor de probabilidades
-        uniform_prob = 1.0 / n_ramos
-        P = (1 - p_t) * np.full(n_ramos, uniform_prob) + p_t * r
-
-        # Normalizar
-        S = P.sum()
-        if S == 0:
-            P = np.full(n_ramos, 1.0 / n_ramos)
+            P = uniform.copy()
+        P = np.clip(P, 0, None)
+        sumP = P.sum()
+        if sumP == 0:
+            P = uniform.copy()
         else:
-            P = P / S
-
+            P = P / sumP
         ramo = rng.choice(np.arange(1, n_ramos+1), p=P)
         conta2ramo[conta] = ramo
 
@@ -485,12 +438,15 @@ def assign_ramo_atividade_group_size(
     return_df=False
 ):
     """
-    Group size bias (marginal) controlado com 1 ramo-alvo.
+    Group size bias (marginal) controlado com 1 ou mais ramos-alvo.
 
     Interpretação de v:
       - v=0   -> uniforme (1/n_ramos para cada ramo)
-      - v=1   -> 100% das contas no ramo-alvo
-      - 0<v<1 -> mistura: q_eff = (1-v)*uniforme + v*delta_alvo
+      - v=1   -> 100% das contas nos ramos-alvo (uniforme entre eles)
+      - 0<v<1 -> mistura: q_eff = (1-v)*q0 + v*q1
+    Onde:
+      - q0: uniforme global
+      - q1: uniforme nos ramos-alvo (lista ou int)
 
     Atribui por CONTA (não por transação) e controla proporções globais via contagens
     (com aleatoriedade apenas no embaralhamento final).
@@ -500,18 +456,32 @@ def assign_ramo_atividade_group_size(
 
     rng = np.random.default_rng(seed)
 
-    target_ramo = int(target_ramo)
-    if not (1 <= target_ramo <= n_ramos):
-        raise ValueError(f"target_ramo deve estar em 1..{n_ramos}.")
+    # Permitir target_ramo ser int ou lista
+    if isinstance(target_ramo, int):
+        target_ramos = [target_ramo]
+    elif isinstance(target_ramo, (list, tuple, np.ndarray)):
+        target_ramos = list(target_ramo)
+    else:
+        raise ValueError("target_ramo deve ser int ou lista de int.")
+
+    # Validação dos ramos
+    for ramo in target_ramos:
+        if not (1 <= int(ramo) <= n_ramos):
+            raise ValueError(f"Cada target_ramo deve estar em 1..{n_ramos}.")
 
     v = float(v)
     v = min(max(v, 0.0), 1.0)
 
-    # Distribuição efetiva: (1-v)*uniforme + v*delta_alvo
-    uniform = np.full(n_ramos, 1.0 / n_ramos, dtype=float)
-    delta = np.zeros(n_ramos, dtype=float)
-    delta[target_ramo - 1] = 1.0
-    q_eff = (1.0 - v) * uniform + v * delta
+    # q0: uniforme global
+    q0 = np.full(n_ramos, 1.0 / n_ramos, dtype=float)
+    # q1: uniforme nos ramos-alvo
+    q1 = np.zeros(n_ramos, dtype=float)
+    m = len(target_ramos)
+    for j in target_ramos:
+        q1[j-1] = 1.0 / m
+
+    # Distribuição efetiva: (1-v)*q0 + v*q1
+    q_eff = (1.0 - v) * q0 + v * q1
     q_eff = q_eff / q_eff.sum()
 
     # Universo de contas (por conta, não por transação)
@@ -520,7 +490,6 @@ def assign_ramo_atividade_group_size(
     if n == 0:
         return ({}, df.copy()) if return_df else {}
 
-    # Contagens globais com ajuste por "maiores restos"
     raw = q_eff * n
     counts = np.floor(raw).astype(int)
     rem = n - counts.sum()
@@ -604,32 +573,26 @@ def main():
 
     logging.info("Construindo linhas de saída...")
     out_df = build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_lookup)
-    # Atribui ramo_atividade enviesado por contapython3 scripts/convert_logs.py conf.json
+    # Atribui ramo_atividade enviesado por conta
     
+    """
     conta2ramo = assign_ramo_atividade_targets(
         out_df,
         n_ramos=7,
-        p_fixed_d=0,         # viés fixo para I-d
-        p_fixed_norm=0,      # viés fixo para normais
-        p_fixed_e=0,         # viés fixo para I-e (opcional)
-        target_norm=[1],
-        target_d=[4],
-        target_e=[7],
-        a=1.0,
-        b=2.0,
-        seed=192
+        target_despriv=[1, 7],  # exemplo: ramos desprivilegiados
+        v=1,                  # intensidade do viés (ajuste conforme desejado)
+        seed=11
     )
-
     """
-    # Group size bias (1 ramo-alvo + v)
+    # Group size bias
     conta2ramo = assign_ramo_atividade_group_size(
         out_df,
         n_ramos=7,
-        target_ramo=1,  # ramo-alvo
+        target_ramo=[1, 7], # ramo-alvo
         v=1,          # 0=uniforme, 1=sempre alvo
-        seed=99
+        seed=2703
     )
-    """
+    
     out_df["RAMO_ATIVIDADE_1"] = out_df["NUMERO_CONTA"].map(conta2ramo)
 
     logging.info("Gravando arquivo de saída: %s", out_file)
