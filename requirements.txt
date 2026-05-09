@@ -5,3 +5,4 @@ pygraphviz
 powerlaw
 python-dateutil
 Faker
+pydantic

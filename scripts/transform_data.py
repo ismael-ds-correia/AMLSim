@@ -17,6 +17,7 @@ import argparse
 import logging
 import pandas as pd
 import numpy as np
+import yaml
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
@@ -511,6 +512,7 @@ def assign_ramo_atividade_group_size(
     return conta2ramo
 
 def main():
+
     parser = argparse.ArgumentParser(description="Transforma dados do AMLSim em CSV de transações.")
     parser.add_argument(
         "-d", "--data-dir",
@@ -521,7 +523,24 @@ def main():
         default=None,
         help="Arquivo de saída CSV (padrão: <data-dir>/sintetic_v0.csv)"
     )
+    parser.add_argument(
+        "-c", "--config",
+        default="config.yaml",
+        help="Arquivo de configuração YAML (padrão: config.yaml na raiz)"
+    )
     args = parser.parse_args()
+
+    # Carrega parâmetros do YAML
+    config_path = os.path.abspath(args.config)
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    bias_cfg = config.get("bias", {})
+    n_ramos = bias_cfg.get("n_ramos", 7)
+    v = bias_cfg.get("v", 0.0)
+    target_ramo = bias_cfg.get("target_ramo", [1])
+    bias_method = bias_cfg.get("method", "group_size")
+    bias_seed = bias_cfg.get("seed", 42)
 
     data_dir = os.path.abspath(args.data_dir)
     if not os.path.isdir(data_dir):
@@ -575,24 +594,27 @@ def main():
     out_df = build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_lookup)
     # Atribui ramo_atividade enviesado por conta
     
-    """
-    conta2ramo = assign_ramo_atividade_targets(
-        out_df,
-        n_ramos=7,
-        target_despriv=[1, 7],  # exemplo: ramos desprivilegiados
-        v=1,                  # intensidade do viés (ajuste conforme desejado)
-        seed=11
-    )
-    """
-    # Group size bias
-    conta2ramo = assign_ramo_atividade_group_size(
-        out_df,
-        n_ramos=7,
-        target_ramo=[1, 7], # ramo-alvo
-        v=1,          # 0=uniforme, 1=sempre alvo
-        seed=2703
-    )
-    
+
+    # Seleciona método de viés
+    if bias_method == "group_size":
+        conta2ramo = assign_ramo_atividade_group_size(
+            out_df,
+            n_ramos=n_ramos,
+            target_ramo=target_ramo,
+            v=v,
+            seed=bias_seed
+        )
+    elif bias_method == "prevalency_disparity":
+        conta2ramo = assign_ramo_atividade_targets(
+            out_df,
+            n_ramos=n_ramos,
+            target_despriv=target_ramo,
+            v=v,
+            seed=bias_seed
+        )
+    else:
+        raise ValueError(f"Método de viés desconhecido: {bias_method}")
+
     out_df["RAMO_ATIVIDADE_1"] = out_df["NUMERO_CONTA"].map(conta2ramo)
 
     logging.info("Gravando arquivo de saída: %s", out_file)

@@ -1,0 +1,51 @@
+
+
+simulation:
+  total_steps: 1000
+  seed: 42
+  output_dir: outputs/my_simulation2
+  log_level: INFO
+
+
+accounts:
+  num_accounts: 10000
+  initial_balance_min: 1000.0
+  initial_balance_max: 100000.0
+
+transactions:
+
+  min_amount: 10.0
+  max_amount: 10000.0
+  typologies:
+    - name: fragmented_deposit
+      min_day: 1
+      max_day: 5
+      min_amount: 100.0
+      max_amount: 1000.0
+    - name: fragmented_withdrawal
+      min_day: 2
+      max_day: 6
+      min_amount: 200.0
+      max_amount: 2000.0
+
+  LEGAL_LIMIT: 6000.0
+  MAX_TOTAL: 20000.0
+  minCycles: 3
+  maxCycles: 40
+  minFrac: 0.0007
+  maxFrac: 0.030
+
+bias:
+  method: group_size 
+  v: 0.5
+  n_ramos: 7
+  target_ramo: [1, 7]
+  seed: 42
+
+files:
+  param_dir: paramFiles/100K
+  schema_file: paramFiles/100K/schema.json
+  alert_patterns_file: paramFiles/100K/alertPatterns.csv
+  transaction_types_file: paramFiles/100K/transactionType.csv
+
+

@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 
 
 def load_csv_skip_slash_comments(csv_path: Path) -> pd.DataFrame:
-    # Seu CSV pode ter linhas começando com "//", então tratamos linhas iniciando com "/" como comentário.
     return pd.read_csv(csv_path, comment="/", encoding="utf-8")
 
 
