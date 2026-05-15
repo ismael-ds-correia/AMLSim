@@ -14,13 +14,9 @@ import amlsim.model.cash.CashOutModel;
  */
 public class FragmentedWithdrawalTypology extends AMLTypology {
 
-    private static final double LEGAL_LIMIT = 6000.0;      // Limite legal para saque único
-    private static final double MAX_TOTAL = 20000.0;       // Valor máximo sorteado para saque total
-
     private Account targetAccount;                          // Conta que fará os saques
     private List<Long> withdrawalSteps = new ArrayList<>();     // Passos de simulação para cada saque
     private List<Double> withdrawalAmounts = new ArrayList<>(); // Valores de cada saque fracionado
-    private double totalWithdrawal = 0.0;                      // Valor total a ser sacado
 
     private Random random = AMLSim.getRandom();
 
@@ -38,22 +34,24 @@ public class FragmentedWithdrawalTypology extends AMLTypology {
         withdrawalAmounts.clear();
         withdrawalSteps.clear();
 
-        int minFrac = (int)(0.0007 * LEGAL_LIMIT);
-        int maxFrac = (int)(0.030 * LEGAL_LIMIT);
-        double alphaFrac = 2.7;
+        double legalLimit = AMLSim.getSimProp().getFragmentedLegalLimit();
+
+        int minFrac = (int) Math.max(1, Math.round(AMLSim.getSimProp().getFragmentedMinFrac() * legalLimit));
+        int maxFrac = (int) Math.max(1, Math.round(AMLSim.getSimProp().getFragmentedMaxFrac() * legalLimit));
+        double alphaFrac = AMLSim.getSimProp().getFragmentedAlphaFrac();
 
         // Parâmetros da power law para o saldo líquido diário (negativos)
-        double minDay = -50000.0;
-        double maxDay = -800.0;
-        double alphaDay = 1.6;
+        double minDay = AMLSim.getSimProp().getFragmentedWithdrawalMinDay();
+        double maxDay = AMLSim.getSimProp().getFragmentedWithdrawalMaxDay();
+        double alphaDay = AMLSim.getSimProp().getFragmentedAlphaDay();
 
-        int minCycles = 3;
-        int maxCycles = 40;
-        int numCycles = samplePowerLaw(minCycles, maxCycles, 1.5, random);
+        int minCycles = AMLSim.getSimProp().getFragmentedMinCycles();
+        int maxCycles = AMLSim.getSimProp().getFragmentedMaxCycles();
+        int numCycles = samplePowerLaw(minCycles, maxCycles, AMLSim.getSimProp().getFragmentedCycleAlpha(), random);
 
-        int minWindow = 3;
-        int maxWindow = 15;
-        double alphaWindow = 1.5;
+        int minWindow = AMLSim.getSimProp().getFragmentedMinWindow();
+        int maxWindow = AMLSim.getSimProp().getFragmentedMaxWindow();
+        double alphaWindow = AMLSim.getSimProp().getFragmentedAlphaWindow();
 
         int usedStep = (int)startStep;
 

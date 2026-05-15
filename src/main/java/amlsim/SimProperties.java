@@ -2,7 +2,9 @@ package amlsim;
 
 import java.io.*;
 import java.nio.file.*;
+import java.util.Map;
 import org.json.*;
+import org.yaml.snakeyaml.Yaml;
 
 
 /**
@@ -25,6 +27,24 @@ public class SimProperties {
     private int normalTxInterval;
     private double minTxAmount;  // Minimum base (normal) transaction amount
     private double maxTxAmount;  // Maximum base (suspicious) transaction amount
+
+    // YAML-only overrides for fragmented typologies (JSON remains the source for existing settings)
+    private double fragmentedLegalLimit = 6000.0;
+    private double fragmentedMaxTotal = 20000.0;
+    private int fragmentedMinCycles = 3;
+    private int fragmentedMaxCycles = 40;
+    private double fragmentedMinFrac = 0.0007;
+    private double fragmentedMaxFrac = 0.030;
+    private double fragmentedAlphaFrac = 2.7;
+    private double fragmentedAlphaDay = 1.6;
+    private double fragmentedCycleAlpha = 1.5;
+    private int fragmentedMinWindow = 3;
+    private int fragmentedMaxWindow = 15;
+    private double fragmentedAlphaWindow = 1.5;
+    private double fragmentedDepositMinDay = 800.0;
+    private double fragmentedDepositMaxDay = 50000.0;
+    private double fragmentedWithdrawalMinDay = -50000.0;
+    private double fragmentedWithdrawalMaxDay = -800.0;
 
     SimProperties(String jsonName) throws IOException{
         String jsonStr = loadTextFile(jsonName);
@@ -60,6 +80,94 @@ public class SimProperties {
         String simName = getSimName();
         workDir = inputProp.getString("directory") + separator + simName + separator;
         System.out.println("Working directory: " + workDir);
+
+        loadFragmentedYamlConfig();
+    }
+
+    private void loadFragmentedYamlConfig() {
+        String yamlPath = System.getProperty("fragmented.config", "config.yaml");
+        Path path = Paths.get(yamlPath);
+        if (!Files.exists(path)) {
+            System.out.println("Fragmented YAML config not found, using defaults: " + path.toAbsolutePath());
+            return;
+        }
+
+        try (InputStream inputStream = Files.newInputStream(path)) {
+            Yaml yaml = new Yaml();
+            Object loaded = yaml.load(inputStream);
+            if (!(loaded instanceof Map)) {
+                System.out.println("Invalid YAML root format, using fragmented defaults.");
+                return;
+            }
+
+            Map<?, ?> root = (Map<?, ?>) loaded;
+            Map<?, ?> transactions = getMap(root, "transactions");
+            if (transactions == null) {
+                System.out.println("'transactions' not found in YAML, using fragmented defaults.");
+                return;
+            }
+
+            fragmentedLegalLimit = getDouble(transactions, fragmentedLegalLimit, "LEGAL_LIMIT", "legal_limit");
+            fragmentedMaxTotal = getDouble(transactions, fragmentedMaxTotal, "MAX_TOTAL", "max_total");
+            fragmentedMinCycles = getInt(transactions, fragmentedMinCycles, "minCycles", "min_cycles");
+            fragmentedMaxCycles = getInt(transactions, fragmentedMaxCycles, "maxCycles", "max_cycles");
+            fragmentedMinFrac = getDouble(transactions, fragmentedMinFrac, "minFrac", "min_frac");
+            fragmentedMaxFrac = getDouble(transactions, fragmentedMaxFrac, "maxFrac", "max_frac");
+            fragmentedAlphaFrac = getDouble(transactions, fragmentedAlphaFrac, "alphaFrac", "alpha_frac");
+            fragmentedAlphaDay = getDouble(transactions, fragmentedAlphaDay, "alphaDay", "alpha_day");
+            fragmentedCycleAlpha = getDouble(transactions, fragmentedCycleAlpha, "cycleAlpha", "cycle_alpha");
+            fragmentedMinWindow = getInt(transactions, fragmentedMinWindow, "minWindow", "min_window");
+            fragmentedMaxWindow = getInt(transactions, fragmentedMaxWindow, "maxWindow", "max_window");
+            fragmentedAlphaWindow = getDouble(transactions, fragmentedAlphaWindow, "alphaWindow", "alpha_window");
+
+            // Optional type-specific overrides
+            Map<?, ?> fragmentedDeposit = getMap(transactions, "fragmented_deposit");
+            if (fragmentedDeposit != null) {
+                fragmentedDepositMinDay = getDouble(fragmentedDeposit, fragmentedDepositMinDay, "minDay", "min_day");
+                fragmentedDepositMaxDay = getDouble(fragmentedDeposit, fragmentedDepositMaxDay, "maxDay", "max_day");
+            }
+
+            Map<?, ?> fragmentedWithdrawal = getMap(transactions, "fragmented_withdrawal");
+            if (fragmentedWithdrawal != null) {
+                fragmentedWithdrawalMinDay = getDouble(fragmentedWithdrawal, fragmentedWithdrawalMinDay, "minDay", "min_day");
+                fragmentedWithdrawalMaxDay = getDouble(fragmentedWithdrawal, fragmentedWithdrawalMaxDay, "maxDay", "max_day");
+            }
+
+            System.out.printf(
+                    "Fragmented YAML params loaded from %s (LEGAL_LIMIT=%.2f, minFrac=%.6f, maxFrac=%.6f)%n",
+                    path.toAbsolutePath(), fragmentedLegalLimit, fragmentedMinFrac, fragmentedMaxFrac
+            );
+        } catch (Exception e) {
+            System.out.println("Failed to load fragmented YAML config, using defaults. Reason: " + e.getMessage());
+        }
+    }
+
+    private static Map<?, ?> getMap(Map<?, ?> source, String key) {
+        Object value = source.get(key);
+        if (value instanceof Map) {
+            return (Map<?, ?>) value;
+        }
+        return null;
+    }
+
+    private static double getDouble(Map<?, ?> source, double defaultValue, String... keys) {
+        for (String key : keys) {
+            Object value = source.get(key);
+            if (value instanceof Number) {
+                return ((Number) value).doubleValue();
+            }
+        }
+        return defaultValue;
+    }
+
+    private static int getInt(Map<?, ?> source, int defaultValue, String... keys) {
+        for (String key : keys) {
+            Object value = source.get(key);
+            if (value instanceof Number) {
+                return ((Number) value).intValue();
+            }
+        }
+        return defaultValue;
     }
 
     private static String loadTextFile(String jsonName) throws IOException{
@@ -153,6 +261,70 @@ public class SimProperties {
     float getCashTxMaxAmount(boolean isCashIn, boolean isSAR){
         String key = isSAR ? "fraud_max_amount" : "normal_max_amount";
         return isCashIn ? cashInProp.getFloat(key) : cashOutProp.getFloat(key);
+    }
+
+    public double getFragmentedLegalLimit() {
+        return fragmentedLegalLimit;
+    }
+
+    public double getFragmentedMaxTotal() {
+        return fragmentedMaxTotal;
+    }
+
+    public int getFragmentedMinCycles() {
+        return fragmentedMinCycles;
+    }
+
+    public int getFragmentedMaxCycles() {
+        return fragmentedMaxCycles;
+    }
+
+    public double getFragmentedMinFrac() {
+        return fragmentedMinFrac;
+    }
+
+    public double getFragmentedMaxFrac() {
+        return fragmentedMaxFrac;
+    }
+
+    public double getFragmentedAlphaFrac() {
+        return fragmentedAlphaFrac;
+    }
+
+    public double getFragmentedAlphaDay() {
+        return fragmentedAlphaDay;
+    }
+
+    public double getFragmentedCycleAlpha() {
+        return fragmentedCycleAlpha;
+    }
+
+    public int getFragmentedMinWindow() {
+        return fragmentedMinWindow;
+    }
+
+    public int getFragmentedMaxWindow() {
+        return fragmentedMaxWindow;
+    }
+
+    public double getFragmentedAlphaWindow() {
+        return fragmentedAlphaWindow;
+    }
+
+    public double getFragmentedDepositMinDay() {
+        return fragmentedDepositMinDay;
+    }
+
+    public double getFragmentedDepositMaxDay() {
+        return fragmentedDepositMaxDay;
+    }
+
+    public double getFragmentedWithdrawalMinDay() {
+        return fragmentedWithdrawalMinDay;
+    }
+
+    public double getFragmentedWithdrawalMaxDay() {
+        return fragmentedWithdrawalMaxDay;
     }
 }
 
