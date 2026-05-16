@@ -51,6 +51,13 @@ NOTE: (October 2021): `bin/` folder has been renamed to `target/classes/`
 # Introduction for Running AMLSim
 See Wiki page [Quick Introduction to AMLSim](https://github.com/IBM/AMLSim/wiki/Quick-Introduction-to-AMLSim) for details.
 
+## 0. Validate the YAML configuration first (Python)
+Before running any generation or simulation step, validate `config.yaml` with Pydantic. This step fails fast if the YAML is missing required fields, has invalid types, or contains inconsistent values.
+
+```bash
+python3 scripts/validate_config.py config.yaml
+```
+
 ## 1. Generate transaction CSV files from parameter files (Python)
 Before running the Python script, please check and edit configuration file `conf.json`.
 ```json5

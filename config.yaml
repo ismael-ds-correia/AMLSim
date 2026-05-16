@@ -1,19 +1,18 @@
 
 
 simulation:
-  total_steps: 1000
+  total_steps: 360
   seed: 42
   output_dir: outputs/my_simulation2
   log_level: INFO
 
 
 accounts:
-  num_accounts: 10000
+  num_accounts: 100
   initial_balance_min: 1000.0
   initial_balance_max: 100000.0
 
 transactions:
-
   min_amount: 10.0
   max_amount: 10000.0
   typologies:

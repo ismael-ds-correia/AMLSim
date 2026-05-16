@@ -1,9 +1,14 @@
 package amlsim;
 
-import java.io.*;
-import java.nio.file.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Map;
-import org.json.*;
+
+import org.json.JSONObject;
 import org.yaml.snakeyaml.Yaml;
 
 
@@ -27,6 +32,8 @@ public class SimProperties {
     private int normalTxInterval;
     private double minTxAmount;  // Minimum base (normal) transaction amount
     private double maxTxAmount;  // Maximum base (suspicious) transaction amount
+    private Integer stepsOverride = null;
+    private String outputDirOverride = null;
 
     // YAML-only overrides for fragmented typologies (JSON remains the source for existing settings)
     private double fragmentedLegalLimit = 6000.0;
@@ -68,27 +75,27 @@ public class SimProperties {
         marginRatio = defaultProp.getDouble("margin_ratio");
 
         String envSeed = System.getenv("RANDOM_SEED");
-        seed = envSeed != null ? Integer.parseInt(envSeed) : generalProp.getInt("random_seed");
-        System.out.println("Random seed: " + seed);
+        boolean seedLockedByEnv = envSeed != null;
+        seed = seedLockedByEnv ? Integer.parseInt(envSeed) : generalProp.getInt("random_seed");
 
-        simName = System.getProperty("simulation_name");
-        if(simName == null){
-            simName = generalProp.getString("simulation_name");
-        }
+        String simNameBySystem = System.getProperty("simulation_name");
+        boolean simNameLockedBySystem = simNameBySystem != null && !simNameBySystem.trim().isEmpty();
+        simName = simNameLockedBySystem ? simNameBySystem : generalProp.getString("simulation_name");
+
+        loadYamlConfig(seedLockedByEnv, simNameLockedBySystem);
+
+        System.out.println("Random seed: " + seed);
         System.out.println("Simulation name: " + simName);
 
-        String simName = getSimName();
         workDir = inputProp.getString("directory") + separator + simName + separator;
         System.out.println("Working directory: " + workDir);
-
-        loadFragmentedYamlConfig();
     }
 
-    private void loadFragmentedYamlConfig() {
+    private void loadYamlConfig(boolean seedLockedByEnv, boolean simNameLockedBySystem) {
         String yamlPath = System.getProperty("fragmented.config", "config.yaml");
         Path path = Paths.get(yamlPath);
         if (!Files.exists(path)) {
-            System.out.println("Fragmented YAML config not found, using defaults: " + path.toAbsolutePath());
+            System.out.println("YAML config not found, using JSON/defaults: " + path.toAbsolutePath());
             return;
         }
 
@@ -96,49 +103,232 @@ public class SimProperties {
             Yaml yaml = new Yaml();
             Object loaded = yaml.load(inputStream);
             if (!(loaded instanceof Map)) {
-                System.out.println("Invalid YAML root format, using fragmented defaults.");
-                return;
+                throw new IllegalArgumentException("Invalid YAML root format: expected a mapping at " + path.toAbsolutePath());
             }
 
             Map<?, ?> root = (Map<?, ?>) loaded;
-            Map<?, ?> transactions = getMap(root, "transactions");
-            if (transactions == null) {
-                System.out.println("'transactions' not found in YAML, using fragmented defaults.");
-                return;
+            Map<?, ?> simulation = getMap(root, "simulation");
+            if (simulation != null) {
+                Integer yamlSteps = getOptionalInt(simulation, "total_steps");
+                if (yamlSteps != null) {
+                    if (yamlSteps > 0) {
+                        stepsOverride = yamlSteps;
+                    } else {
+                        throw new IllegalArgumentException("Invalid YAML simulation.total_steps: must be > 0");
+                    }
+                }
+
+                Integer yamlSeed = getOptionalInt(simulation, "seed");
+                if (yamlSeed != null) {
+                    if (!seedLockedByEnv) {
+                        seed = yamlSeed;
+                    } else {
+                        System.out.println("YAML simulation.seed ignored because RANDOM_SEED environment variable is set.");
+                    }
+                }
+
+                String yamlSimName = getOptionalString(simulation, "simulation_name", "name");
+                if (yamlSimName != null) {
+                    if (!simNameLockedBySystem) {
+                        simName = yamlSimName;
+                    } else {
+                        System.out.println("YAML simulation name ignored because -Dsimulation_name is set.");
+                    }
+                }
+
+                String yamlOutputDir = getOptionalString(simulation, "output_dir");
+                if (yamlOutputDir != null) {
+                    outputDirOverride = yamlOutputDir;
+                }
             }
 
-            fragmentedLegalLimit = getDouble(transactions, fragmentedLegalLimit, "LEGAL_LIMIT", "legal_limit");
-            fragmentedMaxTotal = getDouble(transactions, fragmentedMaxTotal, "MAX_TOTAL", "max_total");
-            fragmentedMinCycles = getInt(transactions, fragmentedMinCycles, "minCycles", "min_cycles");
-            fragmentedMaxCycles = getInt(transactions, fragmentedMaxCycles, "maxCycles", "max_cycles");
-            fragmentedMinFrac = getDouble(transactions, fragmentedMinFrac, "minFrac", "min_frac");
-            fragmentedMaxFrac = getDouble(transactions, fragmentedMaxFrac, "maxFrac", "max_frac");
-            fragmentedAlphaFrac = getDouble(transactions, fragmentedAlphaFrac, "alphaFrac", "alpha_frac");
-            fragmentedAlphaDay = getDouble(transactions, fragmentedAlphaDay, "alphaDay", "alpha_day");
-            fragmentedCycleAlpha = getDouble(transactions, fragmentedCycleAlpha, "cycleAlpha", "cycle_alpha");
-            fragmentedMinWindow = getInt(transactions, fragmentedMinWindow, "minWindow", "min_window");
-            fragmentedMaxWindow = getInt(transactions, fragmentedMaxWindow, "maxWindow", "max_window");
-            fragmentedAlphaWindow = getDouble(transactions, fragmentedAlphaWindow, "alphaWindow", "alpha_window");
+            Map<?, ?> yamlTransactions = getMap(root, "transactions");
+            if (yamlTransactions != null) {
+                Double yamlMinAmount = getOptionalDouble(yamlTransactions, "min_amount");
+                Double yamlMaxAmount = getOptionalDouble(yamlTransactions, "max_amount");
+                if (yamlMinAmount != null && yamlMinAmount > 0.0) {
+                    minTxAmount = yamlMinAmount;
+                } else if (yamlMinAmount != null) {
+                    throw new IllegalArgumentException("Invalid YAML transactions.min_amount: must be > 0");
+                }
+                if (yamlMaxAmount != null && yamlMaxAmount >= minTxAmount) {
+                    maxTxAmount = yamlMaxAmount;
+                } else if (yamlMaxAmount != null) {
+                    throw new IllegalArgumentException("Invalid YAML transactions.max_amount: must be >= transactions.min_amount");
+                }
+            }
+
+            Map<?, ?> transactions = getMap(root, "transactions");
+            if (transactions == null) {
+                throw new IllegalArgumentException("Missing required YAML section 'transactions'");
+            }
+
+            Double yamlLegalLimit = getOptionalDouble(transactions, "LEGAL_LIMIT", "legal_limit");
+            if (yamlLegalLimit != null) {
+                if (yamlLegalLimit > 0.0) {
+                    fragmentedLegalLimit = yamlLegalLimit;
+                } else {
+                    throw new IllegalArgumentException("Invalid YAML transactions.LEGAL_LIMIT: must be > 0");
+                }
+            }
+
+            Double yamlMaxTotal = getOptionalDouble(transactions, "MAX_TOTAL", "max_total");
+            if (yamlMaxTotal != null) {
+                if (yamlMaxTotal > 0.0) {
+                    fragmentedMaxTotal = yamlMaxTotal;
+                } else {
+                    throw new IllegalArgumentException("Invalid YAML transactions.MAX_TOTAL: must be > 0");
+                }
+            }
+
+            Integer yamlMinCycles = getOptionalInt(transactions, "minCycles", "min_cycles");
+            if (yamlMinCycles != null) {
+                if (yamlMinCycles > 0) {
+                    fragmentedMinCycles = yamlMinCycles;
+                } else {
+                    throw new IllegalArgumentException("Invalid YAML transactions.minCycles: must be > 0");
+                }
+            }
+
+            Integer yamlMaxCycles = getOptionalInt(transactions, "maxCycles", "max_cycles");
+            if (yamlMaxCycles != null) {
+                if (yamlMaxCycles >= fragmentedMinCycles) {
+                    fragmentedMaxCycles = yamlMaxCycles;
+                } else {
+                    throw new IllegalArgumentException("Invalid YAML transactions.maxCycles: must be >= minCycles");
+                }
+            }
+
+            Double yamlMinFrac = getOptionalDouble(transactions, "minFrac", "min_frac");
+            if (yamlMinFrac != null) {
+                if (yamlMinFrac > 0.0) {
+                    fragmentedMinFrac = yamlMinFrac;
+                } else {
+                    throw new IllegalArgumentException("Invalid YAML transactions.minFrac: must be > 0");
+                }
+            }
+
+            Double yamlMaxFrac = getOptionalDouble(transactions, "maxFrac", "max_frac");
+            if (yamlMaxFrac != null) {
+                if (yamlMaxFrac >= fragmentedMinFrac) {
+                    fragmentedMaxFrac = yamlMaxFrac;
+                } else {
+                    throw new IllegalArgumentException("Invalid YAML transactions.maxFrac: must be >= minFrac");
+                }
+            }
+
+            Double yamlAlphaFrac = getOptionalDouble(transactions, "alphaFrac", "alpha_frac");
+            if (yamlAlphaFrac != null) {
+                if (yamlAlphaFrac > 0.0) {
+                    fragmentedAlphaFrac = yamlAlphaFrac;
+                } else {
+                    throw new IllegalArgumentException("Invalid YAML transactions.alphaFrac: must be > 0");
+                }
+            }
+
+            Double yamlAlphaDay = getOptionalDouble(transactions, "alphaDay", "alpha_day");
+            if (yamlAlphaDay != null) {
+                if (yamlAlphaDay > 0.0) {
+                    fragmentedAlphaDay = yamlAlphaDay;
+                } else {
+                    throw new IllegalArgumentException("Invalid YAML transactions.alphaDay: must be > 0");
+                }
+            }
+
+            Double yamlCycleAlpha = getOptionalDouble(transactions, "cycleAlpha", "cycle_alpha");
+            if (yamlCycleAlpha != null) {
+                if (yamlCycleAlpha > 0.0) {
+                    fragmentedCycleAlpha = yamlCycleAlpha;
+                } else {
+                    throw new IllegalArgumentException("Invalid YAML transactions.cycleAlpha: must be > 0");
+                }
+            }
+
+            Integer yamlMinWindow = getOptionalInt(transactions, "minWindow", "min_window");
+            if (yamlMinWindow != null) {
+                if (yamlMinWindow > 0) {
+                    fragmentedMinWindow = yamlMinWindow;
+                } else {
+                    throw new IllegalArgumentException("Invalid YAML transactions.minWindow: must be > 0");
+                }
+            }
+
+            Integer yamlMaxWindow = getOptionalInt(transactions, "maxWindow", "max_window");
+            if (yamlMaxWindow != null) {
+                if (yamlMaxWindow >= fragmentedMinWindow) {
+                    fragmentedMaxWindow = yamlMaxWindow;
+                } else {
+                    throw new IllegalArgumentException("Invalid YAML transactions.maxWindow: must be >= minWindow");
+                }
+            }
+
+            Double yamlAlphaWindow = getOptionalDouble(transactions, "alphaWindow", "alpha_window");
+            if (yamlAlphaWindow != null) {
+                if (yamlAlphaWindow > 0.0) {
+                    fragmentedAlphaWindow = yamlAlphaWindow;
+                } else {
+                    throw new IllegalArgumentException("Invalid YAML transactions.alphaWindow: must be > 0");
+                }
+            }
 
             // Optional type-specific overrides
             Map<?, ?> fragmentedDeposit = getMap(transactions, "fragmented_deposit");
             if (fragmentedDeposit != null) {
-                fragmentedDepositMinDay = getDouble(fragmentedDeposit, fragmentedDepositMinDay, "minDay", "min_day");
-                fragmentedDepositMaxDay = getDouble(fragmentedDeposit, fragmentedDepositMaxDay, "maxDay", "max_day");
+                Double yamlDepositMinDay = getOptionalDouble(fragmentedDeposit, "minDay", "min_day");
+                if (yamlDepositMinDay != null) {
+                    if (yamlDepositMinDay > 0.0) {
+                        fragmentedDepositMinDay = yamlDepositMinDay;
+                    } else {
+                        throw new IllegalArgumentException("Invalid YAML transactions.fragmented_deposit.minDay: must be > 0");
+                    }
+                }
+
+                Double yamlDepositMaxDay = getOptionalDouble(fragmentedDeposit, "maxDay", "max_day");
+                if (yamlDepositMaxDay != null) {
+                    if (yamlDepositMaxDay >= fragmentedDepositMinDay) {
+                        fragmentedDepositMaxDay = yamlDepositMaxDay;
+                    } else {
+                        throw new IllegalArgumentException("Invalid YAML transactions.fragmented_deposit.maxDay: must be >= minDay");
+                    }
+                }
             }
 
             Map<?, ?> fragmentedWithdrawal = getMap(transactions, "fragmented_withdrawal");
             if (fragmentedWithdrawal != null) {
-                fragmentedWithdrawalMinDay = getDouble(fragmentedWithdrawal, fragmentedWithdrawalMinDay, "minDay", "min_day");
-                fragmentedWithdrawalMaxDay = getDouble(fragmentedWithdrawal, fragmentedWithdrawalMaxDay, "maxDay", "max_day");
+                Double yamlWithdrawalMinDay = getOptionalDouble(fragmentedWithdrawal, "minDay", "min_day");
+                if (yamlWithdrawalMinDay != null) {
+                    if (yamlWithdrawalMinDay < 0.0) {
+                        fragmentedWithdrawalMinDay = yamlWithdrawalMinDay;
+                    } else {
+                        throw new IllegalArgumentException("Invalid YAML transactions.fragmented_withdrawal.minDay: must be negative");
+                    }
+                }
+
+                Double yamlWithdrawalMaxDay = getOptionalDouble(fragmentedWithdrawal, "maxDay", "max_day");
+                if (yamlWithdrawalMaxDay != null) {
+                    if (yamlWithdrawalMaxDay <= fragmentedWithdrawalMinDay) {
+                        fragmentedWithdrawalMaxDay = yamlWithdrawalMaxDay;
+                    } else {
+                        throw new IllegalArgumentException("Invalid YAML transactions.fragmented_withdrawal.maxDay: must be <= minDay");
+                    }
+                }
             }
 
             System.out.printf(
-                    "Fragmented YAML params loaded from %s (LEGAL_LIMIT=%.2f, minFrac=%.6f, maxFrac=%.6f)%n",
-                    path.toAbsolutePath(), fragmentedLegalLimit, fragmentedMinFrac, fragmentedMaxFrac
+                    "YAML loaded from %s (steps=%s, seed=%d, simName=%s, outputDir=%s, minAmount=%.2f, maxAmount=%.2f, LEGAL_LIMIT=%.2f, minFrac=%.6f, maxFrac=%.6f)%n",
+                    path.toAbsolutePath(),
+                    stepsOverride == null ? "JSON" : stepsOverride.toString(),
+                    seed,
+                    simName,
+                    outputDirOverride == null ? "JSON" : outputDirOverride,
+                    minTxAmount,
+                    maxTxAmount,
+                    fragmentedLegalLimit,
+                    fragmentedMinFrac,
+                    fragmentedMaxFrac
             );
         } catch (Exception e) {
-            System.out.println("Failed to load fragmented YAML config, using defaults. Reason: " + e.getMessage());
+            throw new IllegalArgumentException("Failed to load YAML config: " + path.toAbsolutePath(), e);
         }
     }
 
@@ -170,6 +360,49 @@ public class SimProperties {
         return defaultValue;
     }
 
+    private static Integer getOptionalInt(Map<?, ?> source, String... keys) {
+        for (String key : keys) {
+            Object value = source.get(key);
+            if (value instanceof Number) {
+                return ((Number) value).intValue();
+            }
+            if (value != null) {
+                throw new IllegalArgumentException("Invalid YAML value for '" + key + "': expected integer");
+            }
+        }
+        return null;
+    }
+
+    private static Double getOptionalDouble(Map<?, ?> source, String... keys) {
+        for (String key : keys) {
+            Object value = source.get(key);
+            if (value instanceof Number) {
+                return ((Number) value).doubleValue();
+            }
+            if (value != null) {
+                throw new IllegalArgumentException("Invalid YAML value for '" + key + "': expected number");
+            }
+        }
+        return null;
+    }
+
+    private static String getOptionalString(Map<?, ?> source, String... keys) {
+        for (String key : keys) {
+            Object value = source.get(key);
+            if (value instanceof String) {
+                String text = ((String) value).trim();
+                if (!text.isEmpty()) {
+                    return text;
+                }
+                throw new IllegalArgumentException("Invalid YAML value for '" + key + "': expected non-empty string");
+            }
+            if (value != null) {
+                throw new IllegalArgumentException("Invalid YAML value for '" + key + "': expected string");
+            }
+        }
+        return null;
+    }
+
     private static String loadTextFile(String jsonName) throws IOException{
         Path file = Paths.get(jsonName);
         byte[] bytes = Files.readAllBytes(file);
@@ -185,7 +418,7 @@ public class SimProperties {
     }
 
     public int getSteps(){
-        return generalProp.getInt("total_steps");
+        return stepsOverride != null ? stepsOverride.intValue() : generalProp.getInt("total_steps");
     }
 
     boolean isComputeDiameter(){
@@ -237,6 +470,9 @@ public class SimProperties {
     }
 
     String getOutputDir(){
+        if (outputDirOverride != null) {
+            return outputDirOverride.endsWith(separator) ? outputDirOverride : outputDirOverride + separator;
+        }
         return outputProp.getString("directory") + separator + simName + separator;
     }
 

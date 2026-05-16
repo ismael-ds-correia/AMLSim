@@ -18,8 +18,27 @@ import logging
 import pandas as pd
 import numpy as np
 import yaml
+from pydantic import BaseModel, Field, ValidationError
+from typing import List
+
+try:
+    from typing import Literal
+except ImportError:
+    from typing_extensions import Literal
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
+
+class BiasConfig(BaseModel):
+    method: Literal["group_size", "prevalency_disparity"]
+    v: float = Field(..., ge=0, le=1)
+    n_ramos: int = Field(..., gt=0)
+    target_ramo: List[int]
+    seed: int
+
+
+class TransformDataConfig(BaseModel):
+    bias: BiasConfig
 
 def get_natureza_lancamento(tx_type):
     tx_type = str(tx_type).upper()
@@ -535,12 +554,22 @@ def main():
     with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
-    bias_cfg = config.get("bias", {})
-    n_ramos = bias_cfg.get("n_ramos", 7)
-    v = bias_cfg.get("v", 0.0)
-    target_ramo = bias_cfg.get("target_ramo", [1])
-    bias_method = bias_cfg.get("method", "group_size")
-    bias_seed = bias_cfg.get("seed", 42)
+    if not isinstance(config, dict):
+        logging.error("Invalid YAML configuration: expected a mapping at root (%s)", config_path)
+        sys.exit(1)
+
+    try:
+        validated_config = TransformDataConfig.model_validate(config)
+    except ValidationError as exc:
+        logging.error("Invalid YAML configuration in %s:\n%s", config_path, exc)
+        sys.exit(1)
+
+    bias_cfg = validated_config.bias
+    n_ramos = bias_cfg.n_ramos
+    v = bias_cfg.v
+    target_ramo = bias_cfg.target_ramo
+    bias_method = bias_cfg.method
+    bias_seed = bias_cfg.seed
 
     data_dir = os.path.abspath(args.data_dir)
     if not os.path.isdir(data_dir):
