@@ -41,6 +41,7 @@ def main() -> None:
         sys.exit(1)
 
     logging.info("YAML validation succeeded: %s", config_path)
+    logging.info("Contract check passed for all sections defined in AMLSimConfig, including bias.")
     logging.info("Validated configuration:\n%s", json.dumps(validated.model_dump(mode="json"), indent=2, sort_keys=True))
 
 

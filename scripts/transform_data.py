@@ -18,8 +18,8 @@ import logging
 import pandas as pd
 import numpy as np
 import yaml
-from pydantic import BaseModel, Field, ValidationError
-from typing import List
+from pydantic import BaseModel, Field, ValidationError, model_validator
+from typing import List, Optional
 
 try:
     from typing import Literal
@@ -31,10 +31,55 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 class BiasConfig(BaseModel):
     method: Literal["group_size", "prevalency_disparity"]
-    v: float = Field(..., ge=0, le=1)
-    n_ramos: int = Field(..., gt=0)
-    target_ramo: List[int]
+    n: Optional[int] = Field(None, gt=0)
+    n_ramos: Optional[int] = Field(None, gt=0)
+    target_ramo: Optional[List[int]] = None
+    g_priv: Optional[List[int]] = None
+    g_despriv: Optional[List[int]] = None
+    v: Optional[float] = Field(None, ge=0, le=1)
+    v_priv: Optional[float] = Field(None, ge=0, le=1)
+    v_despriv: Optional[float] = Field(None, ge=0, le=1)
     seed: int
+
+    @model_validator(mode="after")
+    def check_bias_targets(self):
+        method = self.method
+        n_ramos = self.n if self.n is not None else self.n_ramos
+        if method == "group_size":
+            target_ramo = self.target_ramo or []
+            v = self.v
+            if not target_ramo:
+                raise ValueError("target_ramo must not be empty")
+            if v is None:
+                raise ValueError("v is required when method is group_size")
+            if n_ramos is not None:
+                for ramo in target_ramo:
+                    if ramo < 1 or ramo > n_ramos:
+                        raise ValueError(f"target_ramo values must be within 1..{n_ramos}")
+        elif method == "prevalency_disparity":
+            g_priv = self.g_priv or []
+            g_despriv = self.g_despriv or []
+            v_priv = self.v_priv
+            v_despriv = self.v_despriv
+            if n_ramos is None:
+                raise ValueError("n is required when method is prevalency_disparity")
+            if not g_priv:
+                raise ValueError("g_priv must not be empty")
+            if not g_despriv:
+                raise ValueError("g_despriv must not be empty")
+            if v_priv is None:
+                raise ValueError("v_priv is required when method is prevalency_disparity")
+            if v_despriv is None:
+                raise ValueError("v_despriv is required when method is prevalency_disparity")
+            g_priv_set = set(g_priv)
+            g_despriv_set = set(g_despriv)
+            overlap = g_priv_set.intersection(g_despriv_set)
+            if overlap:
+                raise ValueError("g_priv and g_despriv must not overlap")
+            for ramo in g_priv_set.union(g_despriv_set):
+                if ramo < 1 or ramo > n_ramos:
+                    raise ValueError(f"Group values must be within 1..{n_ramos}")
+        return self
 
 
 class TransformDataConfig(BaseModel):
@@ -391,55 +436,100 @@ def assign_ramo_atividade_empirical(
 def assign_ramo_atividade_targets(
     df,
     n_ramos=7,
-    target_despriv=None,
-    v=0.0,
+    g_priv=None,
+    g_despriv=None,
+    v_priv=0.0,
+    v_despriv=0.0,
     seed=42,
-    return_df=False
+    return_df=False,
+    n=None,
+    target_despriv=None,
+    v=None,
 ):
     """
-    Viés de prevalência simples:
-    - Contas com ao menos uma transação fragmentada (I-d=1 ou I-e=1) recebem mistura convexa entre uniforme global e uniforme nos ramos desprivilegiados.
-    - Demais contas recebem distribuição uniforme global.
+    Viés de prevalência com dois grupos:
+    - Contas suspeitas (ao menos um I-d=1 ou I-e=1) recebem mistura convexa entre a distribuição uniforme global e a distribuição uniforme do grupo desprivilegiado.
+    - Contas não suspeitas recebem mistura convexa entre a distribuição uniforme global e a distribuição uniforme do grupo privilegiado.
     Parâmetros:
         df: DataFrame de transações (com colunas NUMERO_CONTA, I-d, I-e)
-        n_ramos: número de ramos possíveis (N)
-        target_despriv: lista de ramos-alvo do grupo desprivilegiado (valores 1..N)
-        v: intensidade do viés [0,1]
+        n / n_ramos: número de ramos possíveis (N)
+        g_priv: lista de ramos do grupo privilegiado
+        g_despriv: lista de ramos do grupo desprivilegiado
+        v_priv: intensidade do viés para contas não suspeitas [0,1]
+        v_despriv: intensidade do viés para contas suspeitas [0,1]
         seed: semente RNG
         return_df: se True, retorna também df com coluna 'ramo_atividade'
     Retorna:
         conta2ramo: dict {NUMERO_CONTA -> ramo_atividade (1..N)}
         (opcional) df atualizado
     """
+    n_ramos = n if n is not None else n_ramos
+
+    # Compatibilidade retroativa com a chamada atual do pipeline.
+    # Se o chamador ainda passar target_despriv/v, convertemos para o novo mecanismo.
+    if g_despriv is None and target_despriv is not None:
+        g_despriv = target_despriv
+    if g_priv is None and g_despriv is not None:
+        g_priv = [ramo for ramo in range(1, n_ramos + 1) if ramo not in set(g_despriv)]
+    if g_priv is None:
+        g_priv = list(range(1, n_ramos + 1))
+    if g_despriv is None:
+        g_despriv = list(range(1, n_ramos + 1))
+
+    if v is not None:
+        v_priv = v if v_priv == 0.0 else v_priv
+        v_despriv = v if v_despriv == 0.0 else v_despriv
+
+    if not (1 <= int(n_ramos)):
+        raise ValueError("n_ramos deve ser positivo.")
+
+    def _normalize_probabilities(group_ramos):
+        group = sorted({int(ramo) for ramo in group_ramos})
+        if not group:
+            raise ValueError("Os grupos de ramos não podem ser vazios.")
+        for ramo in group:
+            if ramo < 1 or ramo > n_ramos:
+                raise ValueError(f"Cada ramo deve estar em 1..{n_ramos}.")
+        vector = np.zeros(n_ramos, dtype=float)
+        vector[np.array(group, dtype=int) - 1] = 1.0 / len(group)
+        return vector
+
+    def _mix_with_uniform(base_uniform, group_uniform, intensity):
+        intensity = float(intensity)
+        intensity = min(max(intensity, 0.0), 1.0)
+        return (1.0 - intensity) * base_uniform + intensity * group_uniform
+
     rng = np.random.default_rng(seed)
     df = df.copy()
-    # Identifica contas com ao menos uma transação fragmentada
-    conta2frag = df.groupby("NUMERO_CONTA").apply(lambda x: ((x["I-d"] == 1) | (x["I-e"] == 1)).any())
+    # Etapa determinística: identificar suspeita por conta.
+    conta2suspeita = df.groupby("NUMERO_CONTA").apply(
+        lambda x: ((x["I-d"] == 1) | (x["I-e"] == 1)).any()
+    )
 
-    # Vetores de probabilidade
-    uniform = np.full(n_ramos, 1.0 / n_ramos)
-    if target_despriv is None or len(target_despriv) == 0:
-        r_despriv = uniform.copy()
-    else:
-        r_despriv = np.zeros(n_ramos)
-        m = len(target_despriv)
-        for j in target_despriv:
-            r_despriv[j-1] = 1.0 / m
+    # Etapa determinística: construir os vetores de probabilidade.
+    q0 = np.full(n_ramos, 1.0 / n_ramos, dtype=float)
+    q_priv = _normalize_probabilities(g_priv)
+    q_despriv = _normalize_probabilities(g_despriv)
 
+    # Etapa determinística: definir a distribuição efetiva por conta.
     contas = df["NUMERO_CONTA"].unique()
     conta2ramo = {}
+
     for conta in contas:
-        fez_frag = conta2frag.get(conta, False)
-        if fez_frag:
-            P = (1 - v) * uniform + v * r_despriv
+        suspeita = conta2suspeita.get(conta, False)
+        if suspeita:
+            P = _mix_with_uniform(q0, q_despriv, v_despriv)
         else:
-            P = uniform.copy()
-        P = np.clip(P, 0, None)
+            P = _mix_with_uniform(q0, q_priv, v_priv)
+
+        # Etapa de amostragem: normaliza e sorteia o ramo final.
+        P = np.clip(P, 0.0, None)
         sumP = P.sum()
-        if sumP == 0:
-            P = uniform.copy()
+        if sumP <= 0.0:
+            P = q0.copy()
         else:
             P = P / sumP
+
         ramo = rng.choice(np.arange(1, n_ramos+1), p=P)
         conta2ramo[conta] = ramo
 
@@ -535,6 +625,7 @@ def main():
     parser = argparse.ArgumentParser(description="Transforma dados do AMLSim em CSV de transações.")
     parser.add_argument(
         "-d", "--data-dir",
+        required=True,
         help="Pasta contendo alert_transactions.csv, accounts.csv, cash_tx.csv (padrão: %(default)s)"
     )
     parser.add_argument(
@@ -565,9 +656,7 @@ def main():
         sys.exit(1)
 
     bias_cfg = validated_config.bias
-    n_ramos = bias_cfg.n_ramos
-    v = bias_cfg.v
-    target_ramo = bias_cfg.target_ramo
+    n_ramos = bias_cfg.n if bias_cfg.n is not None else bias_cfg.n_ramos
     bias_method = bias_cfg.method
     bias_seed = bias_cfg.seed
 
@@ -629,16 +718,18 @@ def main():
         conta2ramo = assign_ramo_atividade_group_size(
             out_df,
             n_ramos=n_ramos,
-            target_ramo=target_ramo,
-            v=v,
+            target_ramo=bias_cfg.target_ramo,
+            v=bias_cfg.v,
             seed=bias_seed
         )
     elif bias_method == "prevalency_disparity":
         conta2ramo = assign_ramo_atividade_targets(
             out_df,
-            n_ramos=n_ramos,
-            target_despriv=target_ramo,
-            v=v,
+            n=n_ramos,
+            g_priv=bias_cfg.g_priv,
+            g_despriv=bias_cfg.g_despriv,
+            v_priv=bias_cfg.v_priv,
+            v_despriv=bias_cfg.v_despriv,
             seed=bias_seed
         )
     else:

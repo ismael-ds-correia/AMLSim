@@ -35,10 +35,12 @@ transactions:
   maxFrac: 0.030
 
 bias:
-  method: group_size 
-  v: 0.5
-  n_ramos: 7
-  target_ramo: [1, 7]
+  method: prevalency_disparity
+  n: 7
+  g_priv: [1, 2, 3, 4, 5]
+  g_despriv: [6, 7]
+  v_priv: 0.5
+  v_despriv: 0.5
   seed: 42
 
 files:

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, Field, FilePath, root_validator
 from typing_extensions import Literal
@@ -80,21 +80,54 @@ class TransactionsConfig(StrictBaseModel):
 
 class BiasConfig(StrictBaseModel):
     method: Literal["group_size", "prevalency_disparity"]
-    v: float = Field(..., ge=0, le=1)
-    n_ramos: int = Field(..., gt=0)
-    target_ramo: List[int]
+    n: Optional[int] = Field(None, gt=0)
+    n_ramos: Optional[int] = Field(None, gt=0)
+    target_ramo: Optional[List[int]] = None
+    g_priv: Optional[List[int]] = None
+    g_despriv: Optional[List[int]] = None
+    v: Optional[float] = Field(None, ge=0, le=1)
+    v_priv: Optional[float] = Field(None, ge=0, le=1)
+    v_despriv: Optional[float] = Field(None, ge=0, le=1)
     seed: int
 
     @root_validator(skip_on_failure=True)
     def check_bias_targets(cls, values):
-        target_ramo = values.get("target_ramo") or []
-        n_ramos = values.get("n_ramos")
-        if not target_ramo:
-            raise ValueError("target_ramo must not be empty")
-        if n_ramos is not None:
-            for ramo in target_ramo:
+        method = values.get("method")
+        n_ramos = values.get("n") or values.get("n_ramos")
+        if method == "group_size":
+            target_ramo = values.get("target_ramo") or []
+            v = values.get("v")
+            if not target_ramo:
+                raise ValueError("target_ramo must not be empty")
+            if v is None:
+                raise ValueError("v is required when method is group_size")
+            if n_ramos is not None:
+                for ramo in target_ramo:
+                    if ramo < 1 or ramo > n_ramos:
+                        raise ValueError(f"target_ramo values must be within 1..{n_ramos}")
+        elif method == "prevalency_disparity":
+            g_priv = values.get("g_priv") or []
+            g_despriv = values.get("g_despriv") or []
+            v_priv = values.get("v_priv")
+            v_despriv = values.get("v_despriv")
+            if n_ramos is None:
+                raise ValueError("n is required when method is prevalency_disparity")
+            if not g_priv:
+                raise ValueError("g_priv must not be empty")
+            if not g_despriv:
+                raise ValueError("g_despriv must not be empty")
+            if v_priv is None:
+                raise ValueError("v_priv is required when method is prevalency_disparity")
+            if v_despriv is None:
+                raise ValueError("v_despriv is required when method is prevalency_disparity")
+            g_priv_set = set(g_priv)
+            g_despriv_set = set(g_despriv)
+            overlap = g_priv_set.intersection(g_despriv_set)
+            if overlap:
+                raise ValueError("g_priv and g_despriv must not overlap")
+            for ramo in g_priv_set.union(g_despriv_set):
                 if ramo < 1 or ramo > n_ramos:
-                    raise ValueError(f"target_ramo values must be within 1..{n_ramos}")
+                    raise ValueError(f"Group values must be within 1..{n_ramos}")
         return values
 
 
