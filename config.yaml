@@ -1,7 +1,7 @@
 
 
 simulation:
-  total_steps: 360
+  total_steps: re
   seed: 42
   output_dir: outputs/my_simulation2
   log_level: INFO
@@ -37,8 +37,8 @@ transactions:
 bias:
   method: prevalency_disparity
   n: 7
-  g_priv: [1, 2, 3, 4, 5]
-  g_despriv: [6, 7]
+  g_priv: [1, 7]
+  g_despriv: [4]
   v_priv: 0.5
   v_despriv: 0.5
   seed: 42

@@ -37,12 +37,26 @@ def main() -> None:
     try:
         validated = AMLSimConfig.model_validate(config_data)
     except ValidationError as exc:
-        logging.error("YAML validation failed for %s:\n%s", config_path, exc)
-        sys.exit(1)
-
-    logging.info("YAML validation succeeded: %s", config_path)
-    logging.info("Contract check passed for all sections defined in AMLSimConfig, including bias.")
-    logging.info("Validated configuration:\n%s", json.dumps(validated.model_dump(mode="json"), indent=2, sort_keys=True))
+            errors = exc.errors(include_url=False)
+            logging.error("=" * 72)
+            logging.error("YAML validation failed: %s", config_path)
+            logging.error("Total error(s): %d", len(errors))
+            logging.error("-" * 72)
+        
+            for idx, err in enumerate(errors, 1):
+                loc = ".".join(str(part) for part in err.get("loc", [])) or "<root>"
+                msg = err.get("msg", "validation error")
+                err_type = err.get("type", "unknown")
+                value = err.get("input", None)
+        
+                logging.error("[%d] Field: %s", idx, loc)
+                logging.error("    Reason: %s", msg)
+                logging.error("    Received value: %r", value)
+                logging.error("    Type: %s", err_type)
+                logging.error("-" * 72)
+    
+            logging.error("Tip: review the fields above in the file %s and try again.", config_path)
+            sys.exit(1)
 
 
 if __name__ == "__main__":
