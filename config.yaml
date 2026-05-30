@@ -1,7 +1,7 @@
 
 
 simulation:
-  total_steps: re
+  total_steps: 360
   seed: 42
   output_dir: outputs/my_simulation2
   log_level: INFO
@@ -35,13 +35,20 @@ transactions:
   maxFrac: 0.030
 
 bias:
-  method: prevalency_disparity
-  n: 7
-  g_priv: [1, 7]
-  g_despriv: [4]
-  v_priv: 0.5
-  v_despriv: 0.5
-  seed: 42
+  common:
+    method: prevalency_disparity
+    n_ramos: 7
+    seed: 42
+
+  group_size:
+    target_ramo: [1, 7]
+    v: 0.5
+
+  prevalency_disparity:
+    g_priv: [1, 7]
+    g_despriv: [4]
+    v_priv: 0.5
+    v_despriv: 0.5
 
 files:
   param_dir: paramFiles/100K

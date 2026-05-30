@@ -20,6 +20,7 @@ import numpy as np
 import yaml
 from pydantic import BaseModel, Field, ValidationError, model_validator
 from typing import List, Optional
+from amlsim_config import BiasConfig as SharedBiasConfig
 
 try:
     from typing import Literal
@@ -29,61 +30,8 @@ except ImportError:
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 
-class BiasConfig(BaseModel):
-    method: Literal["group_size", "prevalency_disparity"]
-    n: Optional[int] = Field(None, gt=0)
-    n_ramos: Optional[int] = Field(None, gt=0)
-    target_ramo: Optional[List[int]] = None
-    g_priv: Optional[List[int]] = None
-    g_despriv: Optional[List[int]] = None
-    v: Optional[float] = Field(None, ge=0, le=1)
-    v_priv: Optional[float] = Field(None, ge=0, le=1)
-    v_despriv: Optional[float] = Field(None, ge=0, le=1)
-    seed: int
-
-    @model_validator(mode="after")
-    def check_bias_targets(self):
-        method = self.method
-        n_ramos = self.n if self.n is not None else self.n_ramos
-        if method == "group_size":
-            target_ramo = self.target_ramo or []
-            v = self.v
-            if not target_ramo:
-                raise ValueError("target_ramo must not be empty")
-            if v is None:
-                raise ValueError("v is required when method is group_size")
-            if n_ramos is not None:
-                for ramo in target_ramo:
-                    if ramo < 1 or ramo > n_ramos:
-                        raise ValueError(f"target_ramo values must be within 1..{n_ramos}")
-        elif method == "prevalency_disparity":
-            g_priv = self.g_priv or []
-            g_despriv = self.g_despriv or []
-            v_priv = self.v_priv
-            v_despriv = self.v_despriv
-            if n_ramos is None:
-                raise ValueError("n is required when method is prevalency_disparity")
-            if not g_priv:
-                raise ValueError("g_priv must not be empty")
-            if not g_despriv:
-                raise ValueError("g_despriv must not be empty")
-            if v_priv is None:
-                raise ValueError("v_priv is required when method is prevalency_disparity")
-            if v_despriv is None:
-                raise ValueError("v_despriv is required when method is prevalency_disparity")
-            g_priv_set = set(g_priv)
-            g_despriv_set = set(g_despriv)
-            overlap = g_priv_set.intersection(g_despriv_set)
-            if overlap:
-                raise ValueError("g_priv and g_despriv must not overlap")
-            for ramo in g_priv_set.union(g_despriv_set):
-                if ramo < 1 or ramo > n_ramos:
-                    raise ValueError(f"Group values must be within 1..{n_ramos}")
-        return self
-
-
 class TransformDataConfig(BaseModel):
-    bias: BiasConfig
+    bias: SharedBiasConfig
 
 def get_natureza_lancamento(tx_type):
     tx_type = str(tx_type).upper()
@@ -656,9 +604,10 @@ def main():
         sys.exit(1)
 
     bias_cfg = validated_config.bias
-    n_ramos = bias_cfg.n if bias_cfg.n is not None else bias_cfg.n_ramos
-    bias_method = bias_cfg.method
-    bias_seed = bias_cfg.seed
+    bias_common = bias_cfg.common
+    n_ramos = bias_common.n_ramos
+    bias_method = bias_common.method
+    bias_seed = bias_common.seed
 
     data_dir = os.path.abspath(args.data_dir)
     if not os.path.isdir(data_dir):
@@ -715,21 +664,27 @@ def main():
 
     # Seleciona método de viés
     if bias_method == "group_size":
+        group_cfg = bias_cfg.group_size
+        if group_cfg is None:
+            raise ValueError("bias.group_size is required when bias.common.method is 'group_size'")
         conta2ramo = assign_ramo_atividade_group_size(
             out_df,
             n_ramos=n_ramos,
-            target_ramo=bias_cfg.target_ramo,
-            v=bias_cfg.v,
+            target_ramo=group_cfg.target_ramo,
+            v=group_cfg.v,
             seed=bias_seed
         )
     elif bias_method == "prevalency_disparity":
+        prev_cfg = bias_cfg.prevalency_disparity
+        if prev_cfg is None:
+            raise ValueError("bias.prevalency_disparity is required when bias.common.method is 'prevalency_disparity'")
         conta2ramo = assign_ramo_atividade_targets(
             out_df,
             n=n_ramos,
-            g_priv=bias_cfg.g_priv,
-            g_despriv=bias_cfg.g_despriv,
-            v_priv=bias_cfg.v_priv,
-            v_despriv=bias_cfg.v_despriv,
+            g_priv=prev_cfg.g_priv,
+            g_despriv=prev_cfg.g_despriv,
+            v_priv=prev_cfg.v_priv,
+            v_despriv=prev_cfg.v_despriv,
             seed=bias_seed
         )
     else:
