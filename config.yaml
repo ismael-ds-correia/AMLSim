@@ -2,7 +2,7 @@
 
 simulation:
   total_steps: 360
-  seed: 42
+  seed: 2345
   output_dir: outputs/my_simulation2
   log_level: INFO
 
@@ -38,7 +38,7 @@ bias:
   common:
     method: prevalency_disparity
     n_ramos: 7
-    seed: 42
+    seed: 498
 
   group_size:
     target_ramo: [1, 7]
@@ -47,14 +47,14 @@ bias:
   prevalency_disparity:
     g_priv: [1, 7]
     g_despriv: [4]
-    v_priv: 0.5
-    v_despriv: 0.5
+    v_priv: 0
+    v_despriv: 0
 
 files:
   param_dir: paramFiles/100K
   schema_file: paramFiles/100K/schema.json
   alert_patterns_file: paramFiles/100K/alertPatterns.csv
   transaction_types_file: paramFiles/100K/transactionType.csv
-  output_file: outputs/my_simulation2/sintetic_v0.csv
+  output_file: outputs/my_simulation2/train_pd_v0.csv
 
 

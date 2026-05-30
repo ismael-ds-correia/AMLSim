@@ -18,14 +18,12 @@ import logging
 import pandas as pd
 import numpy as np
 import yaml
-from pydantic import BaseModel, Field, ValidationError, model_validator
-from typing import List, Optional
-from amlsim_config import BiasConfig as SharedBiasConfig
+from pydantic import BaseModel, ValidationError
+from pathlib import Path
 
-try:
-    from typing import Literal
-except ImportError:
-    from typing_extensions import Literal
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from amlsim_config import BiasConfig as SharedBiasConfig
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
