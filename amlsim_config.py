@@ -141,6 +141,7 @@ class FilesConfig(StrictBaseModel):
     schema_file: FilePath
     alert_patterns_file: FilePath
     transaction_types_file: FilePath
+    output_file: Optional[str] = None
 
 
 class AMLSimConfig(StrictBaseModel):

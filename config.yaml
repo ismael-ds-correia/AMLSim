@@ -55,5 +55,6 @@ files:
   schema_file: paramFiles/100K/schema.json
   alert_patterns_file: paramFiles/100K/alertPatterns.csv
   transaction_types_file: paramFiles/100K/transactionType.csv
+  output_file: outputs/my_simulation2/sintetic_v0.csv
 
 

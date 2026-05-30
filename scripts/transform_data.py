@@ -586,6 +586,7 @@ def main():
         default="config.yaml",
         help="Arquivo de configuração YAML (padrão: config.yaml na raiz)"
     )
+
     args = parser.parse_args()
 
     # Carrega parâmetros do YAML
@@ -618,7 +619,17 @@ def main():
     cash_tx_file = os.path.join(data_dir, "cash_tx.csv")
     accounts_file = os.path.join(data_dir, "accounts.csv")
     alert_accounts_file = os.path.join(data_dir, "alert_accounts.csv")
-    out_file = args.out if args.out else os.path.join(data_dir, "sintetic_v0.csv")
+
+    # Novo: lê nome do arquivo de saída do config.yaml, se existir
+    out_file = None
+    files_cfg = config.get("files", {})
+    output_file_from_yaml = files_cfg.get("output_file")
+    if args.out:
+        out_file = args.out
+    elif output_file_from_yaml:
+        out_file = output_file_from_yaml
+    else:
+        out_file = os.path.join(data_dir, "sintetic_v0.csv")
 
     if not os.path.isfile(alert_tx_file):
         logging.error("Arquivo obrigatório não encontrado: %s", alert_tx_file)
