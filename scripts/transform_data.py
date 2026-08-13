@@ -97,6 +97,24 @@ def format_base_amt(val):
 
 def build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_lookup):
     rows = []
+    
+    # Coletar todos os alert_types únicos
+    all_alert_types = set()
+    if "alert_type" in alert_tx_df.columns:
+        all_alert_types = set(alert_tx_df["alert_type"].dropna().unique())
+    
+    # Alert types para excluir
+    excluded_types = {"fragmented_deposit", "fragmented_withdrawal", "FRAGMENTED_DEPOSIT", "FRAGMENTED_WITHDRAWAL"}
+    
+    # Criar colunas para alert_types válidos (excluindo os especificados)
+    valid_alert_types = sorted([t for t in all_alert_types if t.lower() not in [e.lower() for e in excluded_types]])
+    
+    # Debug: verificar alert_types encontrados
+    logging.info(f"Total de alert_types encontrados: {len(all_alert_types)}")
+    logging.info(f"Alert_types: {all_alert_types}")
+    logging.info(f"Alert_types válidos (após exclusão): {valid_alert_types}")
+    logging.info(f"Colunas em alert_tx_df: {alert_tx_df.columns.tolist()}")
+
     # Processa transações normais
     for _, tx in alert_tx_df.iterrows():
         orig_acct_raw = tx.get("orig_acct", "")
@@ -129,6 +147,12 @@ def build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_loo
 
         base_amt = tx.get("base_amt", "")
         tx_type = safe_str(tx.get("tx_type", "")).upper()
+        alert_type = safe_str(tx.get("alert_type", "")).upper()
+
+        # Criar dicionário de valores para colunas de alert_type
+        alert_type_values = {}
+        for at in valid_alert_types:
+            alert_type_values[at] = 1 if alert_type == at.upper() else 0
 
         if tx_type == "FRAGMENTED_DEPOSIT":
             numero_conta = bene_acct
@@ -188,7 +212,8 @@ def build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_loo
             "CPF_CNPJ_OD": cpf_cnpj_od,
             "NOME_PESSOA_OD": nome_pessoa_od,
             "VALOR_SALDO": valor_saldo,
-            "NATUREZA_LANCAMENTO": natureza_lancamento
+            "NATUREZA_LANCAMENTO": natureza_lancamento,
+            **alert_type_values  # Adiciona todas as colunas de alert_type
         })
 
     # Processa cash_tx
@@ -234,7 +259,13 @@ def build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_loo
 
         base_amt = tx.get("base_amt", "")
         tx_type = safe_str(tx.get("tx_type", "")).upper()
-
+        alert_type = safe_str(tx.get("alert_type", "")).upper()
+                
+        # Criar dicionário de valores para colunas de alert_type (todos 0 para cash_tx)
+        alert_type_values = {}
+        for at in valid_alert_types:
+            alert_type_values[at] = 0  # Cash transactions não são alertas
+        
         if tx_type == "CASH-OUT":
             numero_conta = bene_acct
             cpf_cnpj_titular = cpf_cnpj_od
@@ -287,7 +318,8 @@ def build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_loo
             "CPF_CNPJ_OD": cpf_cnpj_od,
             "NOME_PESSOA_OD": nome_pessoa_od,
             "VALOR_SALDO": valor_saldo,
-            "NATUREZA_LANCAMENTO": natureza_lancamento
+            "NATUREZA_LANCAMENTO": natureza_lancamento,
+            **alert_type_values  # Adiciona todas as colunas de alert_type
         })
 
     cols = [
@@ -306,6 +338,10 @@ def build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_loo
         "VALOR_SALDO",
         "NATUREZA_LANCAMENTO"
     ]
+        
+    # Adiciona colunas de alert_type dinamicamente
+    cols.extend(valid_alert_types)
+        
     return pd.DataFrame(rows, columns=cols)
 
 def assign_ramo_atividade_empirical(
@@ -613,7 +649,7 @@ def main():
         logging.error("Diretório de dados não encontrado: %s", data_dir)
         sys.exit(1)
 
-    alert_tx_file = os.path.join(data_dir, "transactions.csv")
+    alert_tx_file = os.path.join(data_dir, "alert_transactions.csv")
     cash_tx_file = os.path.join(data_dir, "cash_tx.csv")
     accounts_file = os.path.join(data_dir, "accounts.csv")
     alert_accounts_file = os.path.join(data_dir, "alert_accounts.csv")
