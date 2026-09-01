@@ -1,60 +1,57 @@
-
-
 simulation:
-  total_steps: 360
-  seed: 2345
-  output_dir: outputs/my_simulation2
-  log_level: INFO
+  total_steps: 100  # Número total de steps/dias da simulação
+  seed: 10082026  # Semente aleatória para reprodutibilidade
+  output_dir: outputs/my_simulation2  # Diretório de saída dos resultados
+  log_level: INFO  # Nível de detalhamento dos logs (INFO, DEBUG, WARNING, ERROR)
 
 
 accounts:
-  num_accounts: 100
-  initial_balance_min: 1000.0
-  initial_balance_max: 100000.0
+  num_accounts: 1000  # Número total de contas bancárias
+  initial_balance_min: 50000.0  # Saldo inicial mínimo por conta
+  initial_balance_max: 500000.0  # Saldo inicial máximo por conta
 
 transactions:
-  min_amount: 10.0
-  max_amount: 10000.0
+  min_amount: 50.0  # Valor mínimo para transações gerais
+  max_amount: 10000.0  # Valor máximo para transações gerais
   typologies:
-    - name: fragmented_deposit
-      min_day: 1
-      max_day: 5
-      min_amount: 100.0
-      max_amount: 1000.0
-    - name: fragmented_withdrawal
-      min_day: 2
-      max_day: 6
-      min_amount: 200.0
-      max_amount: 2000.0
+    - name: fragmented_deposit  # Nome da tipologia: depósito fragmentado
+      min_day: 1  # Tempo mínimo em dias para concluir a fragmentação (w^(c) do ciclo de fragmentação em 3.1b)
+      max_day: 5  # Tempo máximo em dias para concluir a fragmentação (w^(c) do ciclo de fragmentação em 3.1b)
+      min_amount: 200.0  # Valor mínimo para transações desta tipologia
+      max_amount: 2000.0  # Valor máximo para transações desta tipologia
+    - name: fragmented_withdrawal  # Nome da tipologia: saque fragmentado
+      min_day: 2  # Tempo mínimo em dias para concluir a fragmentação
+      max_day: 6  # Tempo máximo em dias para concluir a fragmentação
+      min_amount: 200.0  # Valor mínimo para transações desta tipologia
+      max_amount: 2000.0  # Valor máximo para transações desta tipologia
 
-  LEGAL_LIMIT: 6000.0
-  MAX_TOTAL: 20000.0
-  minCycles: 3
-  maxCycles: 40
-  minFrac: 0.0007
-  maxFrac: 0.030
+  LEGAL_LIMIT: 100000.0  # Limite legal para transações (acima gera alertas)
+  MAX_TOTAL: 500000.0  # Valor máximo total acumulado permitido
+  minCycles: 1  # Número mínimo de ciclos de transações (3.1-a)
+  maxCycles: 20  # Número máximo de ciclos de transações
+  minFrac: 0.1  # Fração mínima do saldo movimentada por ciclo
+  maxFrac: 0.8  # Fração máxima do saldo movimentada por ciclo
 
 bias:
   common:
-    method: prevalency_disparity
-    n_ramos: 7
-    seed: 498
+    method: prevalency_disparity  
+    n_ramos: 7  # Número de ramos/categorias de atributos (definido pela função κ na Eq. (8))
+    seed: 498  # Semente aleatória para geração de viés
 
-  group_size:
-    target_ramo: [1, 7]
-    v: 0.5
+  group_size: # Método de injeção de viés definido na Seção 3.2.2
+    target_ramo: [1, 7]  # Ramos alvo para análise de tamanho de grupo
+    v: 0.5  # Parâmetro de viés para tamanho de grupo, corresponde a v_gs na eq. 19)
+    
 
-  prevalency_disparity:
-    g_priv: [1, 7]
-    g_despriv: [4]
-    v_priv: 0
-    v_despriv: 0
+  prevalency_disparity: # Método de injeção de viés definido na Seção 3.2.1.
+    g_priv: [1, 7]  # Grupos privilegiados, pertencentes ao grupo privilegiado R^+.
+    g_despriv: [4]  # Grupos desprivilegiados, pertencentes ao grupo não privilegiado R^-
+    v_priv: 0  # Parâmetro de viés para grupos privilegiados, corresponde a v_pd^+ na eq. 16
+    v_despriv: 0  # Parâmetro de viés para grupos desprivilegiados, corresponde a v_pd^- na eq. 15
 
 files:
-  param_dir: paramFiles/100K
-  schema_file: paramFiles/100K/schema.json
-  alert_patterns_file: paramFiles/100K/alertPatterns.csv
-  transaction_types_file: paramFiles/100K/transactionType.csv
-  output_file: outputs/my_simulation2/train_pd_v0.csv
-
-
+  param_dir: paramFiles/100K  # Diretório de arquivos de parâmetros
+  schema_file: paramFiles/100K/schema.json  # Arquivo com esquema de dados
+  alert_patterns_file: paramFiles/100K/alertPatterns.csv  # Padrões de alerta
+  transaction_types_file: paramFiles/100K/transactionType.csv  # Tipos de transações
+  output_file: outputs/my_simulation2/train_pd_v0.csv  # Arquivo de saída CSV
