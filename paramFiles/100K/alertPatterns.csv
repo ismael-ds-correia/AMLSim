@@ -1,4 +1,6 @@
 count,type,schedule_id,min_accounts,max_accounts,min_amount,max_amount,min_period,max_period,bank_id,is_sar
-30,fan_in,2,5,10,100.0,200.0,5,20,bank,True
-30,fan_out,2,5,10,100.0,200.0,5,20,bank,True
-40,cycle,2,5,10,100.0,200.0,5,20,bank,True
+10,fan_in,2,5,10,100.0,200.0,5,20,bank,True
+10,fan_out,2,5,10,100.0,200.0,5,20,bank,True
+20,cycle,2,5,10,100.0,200.0,5,20,bank,True
+20,fragmented_deposit,2,10,20,10000.0,90000.0,1,360,,True
+20,fragmented_withdrawal,2,10,20,10000.0,90000.0,1,360,,True

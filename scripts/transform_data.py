@@ -95,7 +95,7 @@ def format_base_amt(val):
     except Exception:
         return safe_str(val)
 
-def build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_lookup):
+def build_transaction_rows(alert_tx_df, cash_tx, transactions_df, accounts_lookup, alert_acct_lookup):
     rows = []
     
     # Coletar todos os alert_types únicos
@@ -156,6 +156,9 @@ def build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_loo
 
         if tx_type == "FRAGMENTED_DEPOSIT":
             numero_conta = bene_acct
+            numero_conta_od = ""
+            cpf_cnpj_od = ""
+            nome_pessoa_od = ""
         elif orig_acct:
             numero_conta = orig_acct
         elif bene_acct:
@@ -321,6 +324,105 @@ def build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_loo
             "NATUREZA_LANCAMENTO": natureza_lancamento,
             **alert_type_values  # Adiciona todas as colunas de alert_type
         })
+
+    # Processa transactions.csv (transações normais/TRANSFER)
+    if not transactions_df.empty:
+        logging.info(f"Processando {len(transactions_df)} transações normais do transactions.csv")
+        for _, tx in transactions_df.iterrows():
+            orig_acct = safe_str(tx.get("orig_acct", ""))
+            bene_acct = safe_str(tx.get("bene_acct", ""))
+
+            nome_banco = ""
+            numero_conta = ""
+            cpf_cnpj_titular = ""
+            nome_titular = ""
+
+            numero_conta_od = ""
+            cpf_cnpj_od = ""
+            nome_pessoa_od = ""
+
+            # Processar originador
+            if orig_acct:
+                acct_info = enrich_account_info(orig_acct, accounts_lookup, alert_acct_lookup)
+                numero_conta = orig_acct
+                if acct_info:
+                    nome_banco = safe_str(acct_info.get("bank_id", acct_info.get("bank", "")))
+                    cpf_cnpj_titular = safe_str(acct_info.get("ssn", ""))
+                    fn = safe_str(acct_info.get("first_name", ""))
+                    ln = safe_str(acct_info.get("last_name", ""))
+                    if not (fn or ln):
+                        acct_name = safe_str(acct_info.get("acct_name", ""))
+                        nome_titular = acct_name if acct_name else ""
+                    else:
+                        nome_titular = (fn + " " + ln).strip()
+
+            # Processar beneficiário (OD)
+            if bene_acct:
+                acct_info = enrich_account_info(bene_acct, accounts_lookup, alert_acct_lookup)
+                numero_conta_od = bene_acct
+                if acct_info:
+                    cpf_cnpj_od = safe_str(acct_info.get("ssn", ""))
+                    fn = safe_str(acct_info.get("first_name", ""))
+                    ln = safe_str(acct_info.get("last_name", ""))
+                    if not (fn or ln):
+                        acct_name = safe_str(acct_info.get("acct_name", ""))
+                        nome_pessoa_od = acct_name if acct_name else ""
+                    else:
+                        nome_pessoa_od = (fn + " " + ln).strip()
+
+            base_amt = tx.get("base_amt", "")
+            tx_type = safe_str(tx.get("tx_type", "")).upper()
+            
+            # Alert_type values (todos 0 para transações normais)
+            alert_type_values = {}
+            for at in valid_alert_types:
+                alert_type_values[at] = 0
+
+            # Definir NUMERO_CONTA com base na lógica
+            if not numero_conta and bene_acct:
+                numero_conta = bene_acct
+
+            valor_transacao = format_base_amt(base_amt)
+            i_d = 0  # Transações normais não são I-d
+            i_e = 0  # Transações normais não são I-e
+
+            data_lancamento = safe_str(tx.get("tran_timestamp", ""))
+
+            # CNAB para transações normais
+            if tx_type == "TRANSFER":
+                cnab = "117"
+            elif tx_type == "PAYMENT":
+                cnab = "117"
+            elif tx_type == "DEBIT":
+                cnab = "117"
+            else:
+                cnab = ""
+
+            natureza_lancamento = get_natureza_lancamento(tx_type)
+
+            valor_saldo = tx.get("newbalanceDest", "")
+            if pd.isna(valor_saldo) or safe_str(valor_saldo) == "":
+                valor_saldo = tx.get("newbalanceOrig", "")
+
+            rows.append({
+                "VALOR_TRANSACAO": valor_transacao,
+                "CNAB": cnab,
+                "I-d": i_d,
+                "I-e": i_e,
+                "DATA_LANCAMENTO": data_lancamento,
+                "NOME_BANCO": nome_banco,
+                "NUMERO_CONTA": numero_conta,
+                "CPF_CNPJ_TITULAR": cpf_cnpj_titular,
+                "NOME_TITULAR": nome_titular,
+                "NUMERO_CONTA_OD": numero_conta_od,
+                "CPF_CNPJ_OD": cpf_cnpj_od,
+                "NOME_PESSOA_OD": nome_pessoa_od,
+                "VALOR_SALDO": valor_saldo,
+                "NATUREZA_LANCAMENTO": natureza_lancamento,
+                **alert_type_values
+            })
+    else:
+        logging.info("transactions.csv está vazio ou não foi encontrado")
 
     cols = [
         "VALOR_TRANSACAO",
@@ -682,6 +784,14 @@ def main():
         logging.info("Lendo cash_tx de: %s", cash_tx_file)
         cash_tx = load_csv_skip_comments(cash_tx_file)
 
+    transactions_file = os.path.join(data_dir, "transactions.csv")
+    if not os.path.isfile(transactions_file):
+        logging.warning("Arquivo transactions.csv não encontrado: %s", transactions_file)
+        transactions_df = pd.DataFrame()
+    else:
+        logging.info("Lendo transactions de: %s", transactions_file)
+        transactions_df = load_csv_skip_comments(transactions_file)
+
     logging.info("Lendo accounts de: %s", accounts_file)
     accounts_df = load_csv_skip_comments(accounts_file)
 
@@ -699,11 +809,16 @@ def main():
     accounts_lookup, alert_acct_lookup = build_lookup_tables(accounts_df=accounts_df, alert_accounts_df=alert_accounts_df)
 
     missing_cols = [c for c in ("orig_acct", "bene_acct", "base_amt", "tx_type") if c not in alert_tx_df.columns]
+    if not transactions_df.empty:
+        missing_cols_tx = [c for c in ("orig_acct", "bene_acct", "base_amt", "tx_type") if c not in transactions_df.columns]
+        if missing_cols_tx:
+            raise RuntimeError(f"Colunas necessárias ausentes em transactions.csv: {missing_cols_tx}")
+
     if missing_cols:
         raise RuntimeError(f"Colunas necessárias ausentes em transactions.csv: {missing_cols}")
 
     logging.info("Construindo linhas de saída...")
-    out_df = build_transaction_rows(alert_tx_df, cash_tx, accounts_lookup, alert_acct_lookup)
+    out_df = build_transaction_rows(alert_tx_df, cash_tx, transactions_df, accounts_lookup, alert_acct_lookup)
     # Atribui ramo_atividade enviesado por conta
     
 

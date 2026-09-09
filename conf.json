@@ -1,13 +1,13 @@
 {
   "general": {
-    "random_seed": 128,
+    "random_seed": 1233123,
     "simulation_name": "my_simulation2",
     "total_steps": 360,
     "base_date": "2017-01-01"
   },
   "default": {
     "min_amount": 100,
-    "max_amount": 5000,
+    "max_amount": 15000,
     "min_balance": 50000,
     "max_balance": 100000,
     "start_step": -1,
@@ -19,24 +19,24 @@
     "bank_id": "default",
 
     "cash_in": {
-      "normal_interval": 100,
+      "normal_interval": 10,
       "fraud_interval": 50,
-      "normal_min_amount": 50,
-      "normal_max_amount": 100,
+      "normal_min_amount": 15,
+      "normal_max_amount": 2500,
       "fraud_min_amount": 500,
-      "fraud_max_amount": 1000
+      "fraud_max_amount": 2000
     },
     "cash_out": {
       "normal_interval": 10,
-      "fraud_interval": 100,
-      "normal_min_amount": 10,
-      "normal_max_amount": 100,
+      "fraud_interval": 500,
+      "normal_min_amount": 15,
+      "normal_max_amount": 2500,
       "fraud_min_amount": 1000,
-      "fraud_max_amount": 2000
+      "fraud_max_amount": 3000
     }
   },
   "input": {
-    "directory": "paramFiles/100",
+    "directory": "paramFiles/100K",
     "schema": "schema.json",
     "accounts": "accounts.csv",
     "alert_patterns": "alertPatterns.csv",

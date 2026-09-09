@@ -7,9 +7,9 @@
   },
   "default": {
     "min_amount": 100,
-    "max_amount": 1000,
-    "min_balance": 50000,
-    "max_balance": 100000,
+    "max_amount": 100000,
+    "min_balance": 100000,
+    "max_balance": 500000,
     "start_step": -1,
     "end_step": -1,
     "start_range": -1,

@@ -1,6 +1,6 @@
 simulation:
   total_steps: 100  # Número total de steps/dias da simulação
-  seed: 10082026  # Semente aleatória para reprodutibilidade
+  seed: 2342383742830  # Semente aleatória para reprodutibilidade
   output_dir: outputs/my_simulation2  # Diretório de saída dos resultados
   log_level: INFO  # Nível de detalhamento dos logs (INFO, DEBUG, WARNING, ERROR)
 
@@ -8,11 +8,11 @@ simulation:
 accounts:
   num_accounts: 1000  # Número total de contas bancárias
   initial_balance_min: 50000.0  # Saldo inicial mínimo por conta
-  initial_balance_max: 500000.0  # Saldo inicial máximo por conta
+  initial_balance_max: 100000.0  # Saldo inicial máximo por conta
 
 transactions:
-  min_amount: 50.0  # Valor mínimo para transações gerais
-  max_amount: 10000.0  # Valor máximo para transações gerais
+  min_amount: 100.0  # Valor mínimo para transações gerais
+  max_amount: 15000.0  # Valor máximo para transações gerais
   typologies:
     - name: fragmented_deposit  # Nome da tipologia: depósito fragmentado
       min_day: 1  # Tempo mínimo em dias para concluir a fragmentação (w^(c) do ciclo de fragmentação em 3.1b)

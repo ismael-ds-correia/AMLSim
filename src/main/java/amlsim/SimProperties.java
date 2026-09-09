@@ -42,8 +42,8 @@ public class SimProperties {
     private int fragmentedMaxCycles = 40;
     private double fragmentedMinFrac = 0.0007;
     private double fragmentedMaxFrac = 0.030;
-    private double fragmentedAlphaFrac = 2.7;
-    private double fragmentedAlphaDay = 1.6;
+    private double fragmentedAlphaFrac = 0.8;
+    private double fragmentedAlphaDay = 0.7;
     private double fragmentedCycleAlpha = 1.5;
     private int fragmentedMinWindow = 3;
     private int fragmentedMaxWindow = 15;

@@ -51,7 +51,7 @@ public class CashOutModel extends CashModel {
             Branch branch = account.getBranch();
             int minTx = 1;
             int maxTx = 200;
-            double alpha = 1.15;
+            double alpha = 1.05;
             int eachCount = samplePowerLaw(minTx, maxTx, alpha, rand);
 
             for(int i = 0; i < eachCount; i++) {

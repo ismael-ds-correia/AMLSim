@@ -36,10 +36,6 @@ public class TargetedTransactionAmount {
        {
            result = this.target;
        }
-       if (this.target - min <= 100)
-       {
-           result = this.target;
-       }
        else
        {
            result =  min + random.nextDouble() * (max - min);

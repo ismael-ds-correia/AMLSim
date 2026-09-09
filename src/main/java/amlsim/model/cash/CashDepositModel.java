@@ -48,7 +48,7 @@ public class CashDepositModel extends CashModel {
             Branch branch = account.getBranch();
             int minTx = 1;
             int maxTx = 200; // ajuste conforme desejado
-            double alpha = 1.16;
+            double alpha = 1.05;
             int eachCount = samplePowerLaw(minTx, maxTx, alpha, rand);
 
             for(int i = 0; i < eachCount; i++) {
