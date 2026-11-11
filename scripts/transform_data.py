@@ -42,6 +42,54 @@ def get_natureza_lancamento(tx_type):
     else:
         return ""
 
+# Mapeamento de CNAB para descrições possíveis
+DESCRICAO_LANCAMENTO_MAP = {
+    "117": [
+        'TRANSF VALOR P/ CONTA DIF TITULAR',
+        'ENVIO TEV',
+        'TRANSF CTA',
+        'TRANSFERENCIA',
+        'TRANSFERENCIA ENTRE CONTAS',
+        'TRANSFERIDO PARA POUPANCA'
+    ],
+    "114": [
+        'SAQUE',
+        'SAQUE C/C BANCO24HORAS',
+        'COMPRA ELO',
+        'SAQUE COM CARTAO',
+        'COMPRA COM CARTAO',
+        'SAQUE ATM',
+        'SAQUE B24H',
+        'SAQUE C/C BDN'
+    ],
+    "123": [
+        'SAQUE EM ESPECIE'
+    ],
+    "220": [
+        'DEP DINHEIRO TERMINAL',
+        'TEC DEPOSITO DINHEIRO'
+    ]
+}
+
+def get_descricao_lancamento(cnab, rng=None):
+    """Sorteia uma descrição de lançamento baseada no CNAB."""
+    if pd.notna(cnab) and str(cnab).strip() != "":
+        try:
+            cnab = str(int(float(cnab)))
+        except (ValueError, TypeError):
+            cnab = str(cnab).strip()
+    else:
+        cnab = ""
+    
+    if not cnab or cnab not in DESCRICAO_LANCAMENTO_MAP:
+        return ""
+    
+    if rng is None:
+        rng = np.random.default_rng()
+    
+    descricoes = DESCRICAO_LANCAMENTO_MAP[cnab]
+    return rng.choice(descricoes)
+
 def load_csv_skip_comments(path, encoding="utf-8"):
     with open(path, "r", encoding=encoding) as f:
         lines = f.readlines()
@@ -97,6 +145,7 @@ def format_base_amt(val):
 
 def build_transaction_rows(alert_tx_df, cash_tx, transactions_df, accounts_lookup, alert_acct_lookup):
     rows = []
+    rng = np.random.default_rng(42)
     
     # Coletar todos os alert_types únicos
     all_alert_types = set()
@@ -195,6 +244,7 @@ def build_transaction_rows(alert_tx_df, cash_tx, transactions_df, accounts_looku
         else:
             cnab = ""
 
+        descricao_lancamento = get_descricao_lancamento(cnab, rng)
         valor_saldo = tx.get("newbalanceDest", "")
         if pd.isna(valor_saldo) or safe_str(valor_saldo) == "":
             valor_saldo = tx.get("newbalanceOrig", "")
@@ -204,6 +254,7 @@ def build_transaction_rows(alert_tx_df, cash_tx, transactions_df, accounts_looku
         rows.append({
             "VALOR_TRANSACAO": valor_transacao,
             "CNAB": cnab,
+            "DESCRICAO_LANCAMENTO": descricao_lancamento,
             "I-d": i_d,
             "I-e": i_e,
             "DATA_LANCAMENTO": data_lancamento,
@@ -303,6 +354,7 @@ def build_transaction_rows(alert_tx_df, cash_tx, transactions_df, accounts_looku
             cnab = ""
             natureza_lancamento = ""
 
+        descricao_lancamento = get_descricao_lancamento(cnab, rng)
         valor_saldo = tx.get("newbalanceDest", "")
         if pd.isna(valor_saldo) or safe_str(valor_saldo) == "":
             valor_saldo = tx.get("newbalanceOrig", "")
@@ -310,6 +362,7 @@ def build_transaction_rows(alert_tx_df, cash_tx, transactions_df, accounts_looku
         rows.append({
             "VALOR_TRANSACAO": valor_transacao,
             "CNAB": cnab,
+            "DESCRICAO_LANCAMENTO": descricao_lancamento,
             "I-d": i_d,
             "I-e": i_e,
             "DATA_LANCAMENTO": data_lancamento,
@@ -398,6 +451,8 @@ def build_transaction_rows(alert_tx_df, cash_tx, transactions_df, accounts_looku
             else:
                 cnab = ""
 
+            descricao_lancamento = get_descricao_lancamento(cnab, rng)
+
             natureza_lancamento = get_natureza_lancamento(tx_type)
 
             valor_saldo = tx.get("newbalanceDest", "")
@@ -407,6 +462,7 @@ def build_transaction_rows(alert_tx_df, cash_tx, transactions_df, accounts_looku
             rows.append({
                 "VALOR_TRANSACAO": valor_transacao,
                 "CNAB": cnab,
+                "DESCRICAO_LANCAMENTO": descricao_lancamento,
                 "I-d": i_d,
                 "I-e": i_e,
                 "DATA_LANCAMENTO": data_lancamento,
@@ -427,6 +483,7 @@ def build_transaction_rows(alert_tx_df, cash_tx, transactions_df, accounts_looku
     cols = [
         "VALOR_TRANSACAO",
         "CNAB",
+        "DESCRICAO_LANCAMENTO",
         "I-d",
         "I-e",
         "DATA_LANCAMENTO",

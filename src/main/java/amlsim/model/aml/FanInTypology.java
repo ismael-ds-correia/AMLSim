@@ -23,6 +23,7 @@ public class FanInTypology extends AMLTypology {
     private static final int SIMULTANEOUS = 1;
     private static final int FIXED_INTERVAL = 2;
     private static final int RANDOM_RANGE = 3;
+    private static final int CONSECUTIVE_DAYS = 4;
 
     private TargetedTransactionAmount transactionAmount;
 
@@ -46,7 +47,9 @@ public class FanInTypology extends AMLTypology {
         int numOrigs = origList.size();
         int totalStep = (int)(endStep - startStep + 1);
         int defaultInterval = Math.max(totalStep / numOrigs, 1);
-        this.startStep = generateStartStep(defaultInterval);  //  decentralize the first transaction step
+        if(schedulingID != CONSECUTIVE_DAYS){
+            this.startStep = generateStartStep(defaultInterval);  //  decentralize the first transaction step
+        }
 
         steps = new long[numOrigs];
         if(schedulingID == SIMULTANEOUS){
@@ -68,6 +71,20 @@ public class FanInTypology extends AMLTypology {
         }else if(schedulingID == RANDOM_RANGE){
             for(int i=0; i<numOrigs; i++){
                 steps[i] = getRandomStep();
+            }
+        }
+        else if(schedulingID == CONSECUTIVE_DAYS){
+            int range = (int)(endStep - startStep + 1);  // Número de dias na janela
+            int txPerDay = numOrigs / range;  // Transações por dia
+            int remainder = numOrigs % range;  // Transações restantes
+            
+            int txIndex = 0;
+            for(int day = 0; day < range; day++){
+                // Distribuir txPerDay transações neste dia
+                int txInThisDay = txPerDay + (day < remainder ? 1 : 0);
+                for(int t = 0; t < txInThisDay; t++){
+                    steps[txIndex++] = startStep + day;
+                }
             }
         }
     }

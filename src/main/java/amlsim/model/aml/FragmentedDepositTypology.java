@@ -80,11 +80,34 @@ public class FragmentedDepositTypology extends AMLTypology {
                 double powMax = Math.pow(maxDay, 1.0 - alphaDay);
                 double value = Math.pow(powMin + r * (powMax - powMin), 1.0 / (1.0 - alphaDay));
 
-                // Fragmenta o valor diário em frações menores (também por power law)
+                // Fragmenta o valor diário em frações menores (distribuição multimodal)
                 double deposited = 0.0;
                 List<Double> frags = new ArrayList<>();
                 while (deposited < value) {
-                    int fraction = samplePowerLaw(minFrac, maxFrac, alphaFrac, random);
+                    // Usar distribuição multimodal para frações em vez de power law
+                    double r2 = random.nextDouble();
+                    double fraction;
+                    
+                    if (r2 < 0.3) {  // Reduzir peso de 0.4 para 0.3
+                        // Frações pequenas (log₁₀ ≈ 2.5, R$316)
+                        double mu = 5.76;
+                        double sigma = 2.5;  // Aumentar muito de 2.0 para 2.5 (muito espalhado)
+                        fraction = Math.exp(mu + sigma * random.nextGaussian());
+                    } else if (r2 < 0.7) {
+                        // Frações médias (log₁₀ ≈ 3.2, R$1585)
+                        double mu = 7.37;
+                        double sigma = 1.3;
+                        fraction = Math.exp(mu + sigma * random.nextGaussian());
+                    } else {  // Aumentar peso de 0.3 para 0.4
+                        // Frações grandes (log₁₀ ≈ 3.8, R$6309)
+                        double mu = 8.75;
+                        double sigma = 1.0;
+                        fraction = Math.exp(mu + sigma * random.nextGaussian());
+                    }
+                    
+                    // Aplicar limites min/max das frações
+                    fraction = Math.max(minFrac, Math.min(maxFrac, fraction));
+                    
                     double remaining = value - deposited;
                     double depositValue = Math.min(fraction, remaining);
                     frags.add(depositValue);

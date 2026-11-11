@@ -1,6 +1,6 @@
 simulation:
-  total_steps: 100  # Número total de steps/dias da simulação
-  seed: 2342383742830  # Semente aleatória para reprodutibilidade
+  total_steps: 400  # Número total de steps/dias da simulação
+  seed: 2340124283 # Semente aleatória para reprodutibilidade
   output_dir: outputs/my_simulation2  # Diretório de saída dos resultados
   log_level: INFO  # Nível de detalhamento dos logs (INFO, DEBUG, WARNING, ERROR)
 
@@ -25,12 +25,12 @@ transactions:
       min_amount: 200.0  # Valor mínimo para transações desta tipologia
       max_amount: 2000.0  # Valor máximo para transações desta tipologia
 
-  LEGAL_LIMIT: 100000.0  # Limite legal para transações (acima gera alertas)
+  LEGAL_LIMIT: 6000.0  # Limite legal para transações (acima gera alertas)
   MAX_TOTAL: 500000.0  # Valor máximo total acumulado permitido
   minCycles: 1  # Número mínimo de ciclos de transações (3.1-a)
   maxCycles: 20  # Número máximo de ciclos de transações
-  minFrac: 0.1  # Fração mínima do saldo movimentada por ciclo
-  maxFrac: 0.8  # Fração máxima do saldo movimentada por ciclo
+  minFrac: 0.01  # Fração mínima do saldo movimentada por ciclo
+  maxFrac: 0.3  # Fração máxima do saldo movimentada por ciclo
 
 bias:
   common:
@@ -50,8 +50,8 @@ bias:
     v_despriv: 0  # Parâmetro de viés para grupos desprivilegiados, corresponde a v_pd^- na eq. 15
 
 files:
-  param_dir: paramFiles/100K  # Diretório de arquivos de parâmetros
-  schema_file: paramFiles/100K/schema.json  # Arquivo com esquema de dados
-  alert_patterns_file: paramFiles/100K/alertPatterns.csv  # Padrões de alerta
-  transaction_types_file: paramFiles/100K/transactionType.csv  # Tipos de transações
-  output_file: outputs/my_simulation2/train_pd_v0.csv  # Arquivo de saída CSV
+  param_dir: paramFiles/1K # Diretório de arquivos de parâmetros
+  schema_file: paramFiles/1K/schema.json  # Arquivo com esquema de dados
+  alert_patterns_file: paramFiles/1K/alertPatterns.csv  # Padrões de alerta
+  transaction_types_file: paramFiles/1K/transactionType.csv  # Tipos de transações
+  output_file: outputs/my_simulation2/train_pd_v0.csv

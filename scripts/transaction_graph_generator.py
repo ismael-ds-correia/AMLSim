@@ -944,9 +944,22 @@ class TransactionGenerator:
                 self.remove_typology_candidate(n)
                 add_node(n, sub_bank_id)
 
-            for orig in sub_accts:
-                date = random.randrange(start_date, end_date + 1)
-                add_edge(orig, main_acct, amount, date)
+            if schedule == 4:  # CONSECUTIVE_DAYS
+                range_days = end_date - start_date + 1
+                tx_per_day = len(sub_accts) // range_days
+                remainder = len(sub_accts) % range_days
+                
+                tx_index = 0
+                for day in range(range_days):
+                    tx_in_this_day = tx_per_day + (1 if day < remainder else 0)
+                    for _ in range(tx_in_this_day):
+                        if tx_index < len(sub_accts):
+                            add_edge(sub_accts[tx_index], main_acct, amount, start_date + day)
+                            tx_index += 1
+            else:
+                for orig in sub_accts:
+                    date = random.randrange(start_date, end_date + 1)
+                    add_edge(orig, main_acct, amount, date)
 
         elif typology_name == "fan_out":  # fan_out pattern (single (main) account --> multiple accounts)
             main_acct, main_bank_id = add_main_acct()
